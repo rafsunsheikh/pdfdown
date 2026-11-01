@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+out/
+.pdfdown-cache/
+corpus/*.pdf
+!corpus/office-report.pdf
+!corpus/office-slides.pdf
+docs/recording/frames/
+pdfdown-output/

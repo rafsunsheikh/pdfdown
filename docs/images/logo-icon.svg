@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>pdfdown</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1F2A44"/>
+      <stop offset="1" stop-color="#0E1526"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <!-- the page, corner folded -->
+  <path d="M64 36 H158 L194 72 V220 H64 Z" fill="#F4F1EA"/>
+  <path d="M158 36 V72 H194 Z" fill="#C9C3B6"/>
+  <!-- PDF half: two columns of lines and a figure -->
+  <rect x="80" y="56" width="62" height="7" rx="3.5" fill="#E5484D"/>
+  <rect x="80" y="74" width="42" height="5" rx="2.5" fill="#9A9588"/>
+  <rect x="80" y="85" width="42" height="5" rx="2.5" fill="#9A9588"/>
+  <rect x="80" y="96" width="34" height="5" rx="2.5" fill="#9A9588"/>
+  <rect x="132" y="82" width="46" height="26" rx="4" fill="#E5484D" opacity="0.85"/>
+  <path d="M136 104 L148 92 L156 99 L166 88 L174 104 Z" fill="#F4F1EA"/>
+  <!-- the arrow down -->
+  <path d="M129 116 V146" stroke="#2BB673" stroke-width="10" stroke-linecap="round"/>
+  <path d="M114 136 L129 152 L144 136" fill="none" stroke="#2BB673" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Markdown half: a heading mark and one clean column -->
+  <text x="80" y="190" font-family="Menlo, Consolas, monospace" font-size="34" font-weight="700" fill="#2BB673">#</text>
+  <rect x="106" y="168" width="72" height="7" rx="3.5" fill="#1F2A44"/>
+  <rect x="80" y="196" width="98" height="5" rx="2.5" fill="#6B7385"/>
+  <rect x="80" y="207" width="76" height="5" rx="2.5" fill="#6B7385"/>
+</svg>

@@ -1,0 +1,27 @@
+{
+  "name": "@rafsunsheikh/pdfdown",
+  "version": "0.1.0",
+  "description": "Terminal app that turns PDFs, especially research articles, into clean Markdown with tables, cropped figures and checked LaTeX equations. (npm launcher for the pdfdown Python package)",
+  "bin": {
+    "pdfdown": "bin/pdfdown.js"
+  },
+  "files": [
+    "bin/pdfdown.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["pdf", "markdown", "tui", "research", "latex", "converter"],
+  "license": "MIT",
+  "author": "Md Rafsun Sheikh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafsunsheikh/pdfdown.git",
+    "directory": "packaging/npm"
+  },
+  "homepage": "https://github.com/rafsunsheikh/pdfdown",
+  "publishConfig": {
+    "access": "public"
+  }
+}
