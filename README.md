@@ -98,7 +98,7 @@ Pick one:
 uv tool install pdfdown                   # recommended
 pipx install pdfdown
 pip install pdfdown                       # inside a Python 3.10 to 3.14 environment
-npm install -g @rafsunsheikh/pdfdown      # needs uv or Python 3.10 to 3.14
+npm install -g @mdrafsunsheikh/pdfdown      # needs uv or Python 3.10 to 3.14
 brew install rafsunsheikh/tap/pdfdown
 ```
 
