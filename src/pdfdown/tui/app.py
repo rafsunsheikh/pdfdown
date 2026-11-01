@@ -31,7 +31,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import (Footer, Header, Label, ListItem, ListView, Markdown, RichLog, Static, TabbedContent,
+from textual.widgets import (Footer, Header, Label, ListItem, ListView, Markdown, ProgressBar, RichLog, Static, TabbedContent,
                              TabPane, TextArea)
 from textual_image.widget import Image
 
@@ -40,6 +40,7 @@ from pdfdown.document import Block, Box, Document
 from pdfdown.engine import EngineOptions
 from pdfdown.export import area, detected_area, use_latex, write
 from pdfdown.locks import pdfium_lock
+from pdfdown.tui.progress import JobProgress
 
 ICON = {"queued": "·", "converting": "⟳", "done": "✓", "failed": "✗"}
 WELCOME = """# pdfdown
@@ -80,9 +81,12 @@ class Job:
     message: str = ""
     doc: Document | None = None
     markdown: Path | None = None
+    progress: JobProgress | None = None
 
     def label(self) -> str:
-        detail = f"  {self.message}" if self.message and self.status != "done" else ""
+        if self.status == "converting" and self.progress:
+            return f"{ICON[self.status]} {self.pdf.name}  {self.progress.fraction() * 100:.0f}%"
+        detail = f"  {self.message}" if self.message and self.status not in ("done", "queued") else ""
         return f"{ICON[self.status]} {self.pdf.name}{detail}"
 
 
@@ -146,6 +150,10 @@ class PdfdownApp(App):
     #dialog TextArea { height: 8; }
     #dialog Image.equation { width: auto; height: auto; max-height: 10; }
     #crop-view { width: 100%; height: auto; }
+    #progress-panel { height: auto; padding: 1 2; display: none; }
+    #progress-title { text-style: bold; margin-bottom: 1; }
+    #progress-bar { margin-bottom: 1; }
+    #progress-bar Bar { width: 1fr; }
     """
     BINDINGS = [
         Binding("a", "add", "Add PDFs"),
@@ -176,6 +184,7 @@ class PdfdownApp(App):
         self._converting = False
         self._markdown_stale = True
         self._model = None
+        self.watching: Job | None = None  # the job whose progress the Markdown tab shows
 
     # ------------------------------------------------------------------ layout
 
@@ -189,7 +198,11 @@ class PdfdownApp(App):
                 yield ListView(id="elements")
             with TabbedContent(id="tabs"):
                 with TabPane("Markdown", id="tab-markdown"):
-                    with VerticalScroll():
+                    with Vertical(id="progress-panel"):
+                        yield Label("", id="progress-title")
+                        yield ProgressBar(id="progress-bar", total=100, show_eta=False)
+                        yield Static("", id="progress-steps")
+                    with VerticalScroll(id="markdown-scroll"):
                         yield Markdown(WELCOME, id="markdown")
                 with TabPane("Source", id="tab-source"):
                     yield TextArea("", id="source", read_only=True, soft_wrap=True)
@@ -211,6 +224,7 @@ class PdfdownApp(App):
 
     def on_mount(self) -> None:
         self.sub_title = f"output: {self.out}"
+        self.set_interval(0.25, self.tick_progress)
         if self._initial:
             self.add_pdfs(self._initial)
 
@@ -247,10 +261,12 @@ class PdfdownApp(App):
             if self.latex and self._model is None:
                 self._model = _lazy_model()
             started = time.time()
+            job.progress = JobProgress(latex=self.latex, reader_loaded=bool(getattr(self._model, "loaded", False)))
             self.call_from_thread(self.job_changed, job, "starting")
             try:
                 result = run(job.pdf, self.out, latex=self.latex, options=self.options, equation_model=self._model,
-                             progress=lambda message, job=job: self.call_from_thread(self.job_changed, job, message))
+                             progress=lambda message, job=job: self.call_from_thread(self.job_changed, job, message),
+                             step=lambda name, done, total, job=job: self.call_from_thread(job.progress.on_step, name, done, total))
             except Exception as error:  # show it, then carry on with the next PDF
                 job.status = "failed"
                 self.call_from_thread(self.job_changed, job, f"failed: {error}")
@@ -260,10 +276,17 @@ class PdfdownApp(App):
 
     def job_changed(self, job: Job, message: str) -> None:
         job.message = message[:40]
+        if job.status == "converting" and (self.watching is None or self.watching.status != "converting") \
+                and (self.current is None or self.current.status != "done"):
+            self.watch(job)  # nothing finished on screen yet: follow this conversion
         self.log_line(f"[b]{job.pdf.name}[/b]: {message}")
         for item in self.query_one("#files", ListView).query(JobItem):
             if item.job is job:
                 item.query_one(Label).update(job.label())
+        if job is self.watching and job.status in ("done", "failed"):
+            self.tick_progress()
+            if job.status == "done":
+                self.unwatch()
         if job.status == "done" and (self.current is None or self.current is job or self.current.status != "done"):
             self.show_job(job)
         elif job.status == "done":
@@ -279,8 +302,53 @@ class PdfdownApp(App):
 
     @on(ListView.Highlighted, "#files")
     def file_highlighted(self, event: ListView.Highlighted) -> None:
-        if isinstance(event.item, JobItem) and event.item.job.status == "done" and event.item.job is not self.current:
-            self.show_job(event.item.job)
+        if not isinstance(event.item, JobItem):
+            return
+        job = event.item.job
+        if job.status == "done":
+            if job is self.watching:
+                self.unwatch()
+            if job is not self.current:
+                self.show_job(job)
+        elif self.watching is not job:
+            self.watch(job)
+
+    # ------------------------------------------------------------------ progress
+
+    def watch(self, job: Job) -> None:
+        """Show this job's progress in the Markdown tab instead of a document."""
+        self.watching = job
+        self.query_one("#progress-panel").display = True
+        self.query_one("#markdown-scroll").display = False
+        self.tick_progress()
+
+    def unwatch(self) -> None:
+        self.watching = None
+        self.query_one("#progress-panel").display = False
+        self.query_one("#markdown-scroll").display = True
+
+    def tick_progress(self) -> None:
+        for item in self.query_one("#files", ListView).query(JobItem):
+            if item.job.status == "converting":
+                item.query_one(Label).update(item.job.label())
+        job = self.watching
+        if job is None:
+            return
+        title, bar, steps = (self.query_one("#progress-title", Label), self.query_one("#progress-bar", ProgressBar),
+                             self.query_one("#progress-steps", Static))
+        if job.status == "queued":
+            ahead = sum(1 for j in self.jobs if j.status in ("queued", "converting") and self.jobs.index(j) < self.jobs.index(job))
+            title.update(f"{escape(job.pdf.name)} is waiting: {ahead} PDF{'s' * (ahead != 1)} ahead of it")
+            bar.update(progress=0)
+            steps.update("")
+        elif job.status == "failed":
+            title.update(f"[red]{escape(job.pdf.name)} could not be converted[/]")
+            steps.update("The reason is in the Log tab (key 6).")
+        elif job.progress:
+            p = job.progress
+            title.update(f"Converting {escape(job.pdf.name)}  {p.fraction() * 100:.0f}%  [dim]{p.elapsed():.0f} s so far[/]")
+            bar.update(progress=p.fraction() * 100)
+            steps.update("\n".join(p.lines()))
 
     def show_job(self, job: Job) -> None:
         self.current, self.block = job, None

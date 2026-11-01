@@ -115,9 +115,16 @@ def _lazy_model():
         name = "pix2tex"
         _model = None
 
-        def __call__(self, image):
+        @property
+        def loaded(self) -> bool:
+            return self._model is not None
+
+        def warm(self) -> None:
             if self._model is None:
                 self._model = Pix2Tex()
+
+        def __call__(self, image):
+            self.warm()
             return self._model(image)
 
     return Lazy()

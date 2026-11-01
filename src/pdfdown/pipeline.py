@@ -22,27 +22,56 @@ class Result:
 
 
 def run(pdf: str | Path, out_dir: str | Path = "pdfdown-output", latex: bool = True, options: EngineOptions | None = None,
-        progress: Callable[[str], None] | None = None, equation_model=None) -> Result:
+        progress: Callable[[str], None] | None = None, equation_model=None,
+        step: Callable[[str, int, int], None] | None = None) -> Result:
+    """Convert one PDF. `progress` gets messages for people; `step` gets (step, done, total) for progress bars:
+    ("layout", 0, pages) or ("layout-cached", 0, pages), ("cleanup", 0, equations to read), ("write", 0, 0),
+    ("model", 0, 0) while the equation reader loads (only when it must), ("equations", i, n) after each equation,
+    and ("done", 0, 0)."""
+    from pdfdown.engine import cache_path
+
     say = progress or (lambda message: None)
+    mark = step or (lambda name, done, total: None)
     pdf = Path(pdf).expanduser().resolve()
+    with pdfium_lock:
+        import pypdfium2 as pdfium
+
+        document = pdfium.PdfDocument(str(pdf))
+        pages = len(document)
+        document.close()
+    cached = cache_path(pdf, options or EngineOptions()).is_file()
+    mark("layout-cached" if cached else "layout", 0, pages)
     doc = from_docling(convert(pdf, options, progress=say), pdf)
     with pdfium_lock:  # Docling has finished with pdfium; everything below reads the PDF directly
         text = PdfText(pdf)
         try:
+            mark("cleanup", 0, len(doc.of_kind("equation")) if latex else 0)  # total: equations to read later
             say("Cleaning up: page furniture, captions, paragraphs, superscripts")
             clean(doc, text)
             edits.apply(doc, edits.load(doc, out_dir), text)
+            mark("write", 0, 0)
             md = write(doc, out_dir)
             say(f"Wrote {md} (equations as images)")
             if latex and doc.of_kind("equation"):
                 from pdfdown.equations import recognise
 
                 say("Reading equations as LaTeX")
-                recognise(doc, md.parent, text, model=equation_model,
-                          progress=lambda i, n, b: say(f"Equation {i}/{n}: {'LaTeX' if b.extra.get('latex_ok') else 'image'}"))
+                to_read = sum(1 for b in doc.of_kind("equation") if not b.extra.get("latex_by"))
+                mark("equations", 0, to_read)
+
+                def loading():
+                    mark("model", 0, to_read)
+                    say("Loading the equation reader (the first time in a session takes up to a minute)")
+
+                def counted(i, n, b):
+                    mark("equations", i, n)
+                    say(f"Equation {i}/{n}: {'LaTeX' if b.extra.get('latex_ok') else 'image'}")
+
+                recognise(doc, md.parent, text, model=equation_model, progress=counted, loading=loading)
                 md = write(doc, out_dir)
         finally:
             text.close()
+    mark("done", 0, 0)
     return Result(doc, md)
 
 
@@ -73,3 +102,4 @@ def summary(result: Result) -> dict:
         "notes": doc.notes,
         "problems": [str(f) for f in scan(md)],
     }
+

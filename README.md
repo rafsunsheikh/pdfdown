@@ -123,7 +123,7 @@ pdfdown paper.pdf                # open it with a PDF queued
 pdfdown papers/                  # queue every PDF in a folder
 ```
 
-PDFs are converted in the background, one at a time. The first conversion of a long article takes about a minute; opening the same PDF again takes about a second.
+PDFs are converted in the background, one at a time, with a progress bar and a checklist of steps in the Markdown tab (and the percentage in the file list). The first conversion of a long article takes one to a few minutes, mostly reading equations; opening the same PDF again takes seconds. Time estimates learn your computer's speed as you go.
 
 On the left are your files and the figures, tables and equations of the selected one. On the right are tabs:
 

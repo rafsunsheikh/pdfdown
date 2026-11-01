@@ -277,7 +277,8 @@ class Pix2Tex:
 
 
 def recognise(doc: Document, root, pdf_text, model: Callable | None = None,
-              progress: Callable[[int, int, Block], None] | None = None) -> int:
+              progress: Callable[[int, int, Block], None] | None = None,
+              loading: Callable[[], None] | None = None) -> int:
     """Fill in LaTeX for every equation that has an image; returns how many passed the checks."""
     from PIL import Image
 
@@ -294,6 +295,10 @@ def recognise(doc: Document, root, pdf_text, model: Callable | None = None,
         raw = readings.get(b.extra.get("ref"), key)
         if raw is None:  # not read before, or the crop changed
             model = model or Pix2Tex()
+            if loading and not getattr(model, "loaded", True):
+                loading()  # tell the caller, so a progress bar can say what the wait is
+                model.warm()
+                loading = None
             raw = model(Image.open(Path(root) / b.extra["image"]))
             readings.put(b.extra.get("ref"), key, raw)
         latex, number = clean_latex(raw)
