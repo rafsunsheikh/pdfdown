@@ -8,8 +8,8 @@
 <br />
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
-    <img src="docs/images/logo-light.svg" alt="pdfdown" width="420">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/logo-light.svg" alt="pdfdown" width="420">
   </picture>
   <p align="center">
     A terminal app that turns PDFs, especially research articles, into clean Markdown:
@@ -63,9 +63,9 @@
 
 ## About The Project
 
-![pdfdown converting a physics paper: the Markdown, the raw source, a figure and its page, an equation rejected by the check with the reason, the LaTeX editor, and the report](docs/images/pdfdown-demo.gif)
+![pdfdown converting a physics paper: the Markdown, the raw source, a figure and its page, an equation rejected by the check with the reason, the LaTeX editor, and the report](https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/pdfdown-demo.gif)
 
-<sub>Recorded in a terminal without image support, so previews are drawn with coloured blocks. In Ghostty, kitty, WezTerm or iTerm2 they are sharp. ([MP4 version](docs/images/pdfdown-demo.mp4))</sub>
+<sub>Recorded in a terminal without image support, so previews are drawn with coloured blocks. In Ghostty, kitty, WezTerm or iTerm2 they are sharp. ([MP4 version](https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/pdfdown-demo.mp4))</sub>
 
 Copying text out of a research paper usually gives you broken lines, words split by hyphens, two columns mixed together, page headers in the middle of sentences, and no figures. pdfdown gives you a Markdown file you can read, search, quote and edit:
 
@@ -198,15 +198,15 @@ Each picture shows a page of the PDF on the left and the same part of the Markdo
 
 **Two-column physics paper, page 3.** Equation 7 passed the check and became LaTeX. Equations 8 and 9 did not, so they are exact images: the model's reading of equation 9 wrote a plain B where the paper has a calligraphic ℬ, and the check caught it. The text runs on across the column break.
 
-![Page 3 of the physics paper beside its Markdown](docs/images/example-physics.png)
+![Page 3 of the physics paper beside its Markdown](https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/example-physics.png)
 
 **LLaMA, page 2.** Table 1 is rebuilt as a Markdown table with its caption, and the two columns read as one.
 
-![Page 2 of LLaMA beside its Markdown](docs/images/example-llama.png)
+![Page 2 of LLaMA beside its Markdown](https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/example-llama.png)
 
 **DPO, page 4.** Equations (4) and (5) are checked LaTeX; (6) and (7) did not pass and are exact images of the originals. Inline formulas stay as text with superscripts and subscripts; stacked fractions inside a sentence come out flattened (see [Limitations](#limitations)).
 
-![Page 4 of DPO beside its Markdown](docs/images/example-dpo.png)
+![Page 4 of DPO beside its Markdown](https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/docs/images/example-dpo.png)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
