@@ -7,8 +7,8 @@
 class Pdfdown < Formula
   desc "Turn PDFs, especially research articles, into clean Markdown with figures and equations"
   homepage "https://github.com/rafsunsheikh/pdfdown"
-  url "https://files.pythonhosted.org/packages/source/p/pdfdown/pdfdown-0.1.0.tar.gz"
-  sha256 "5832d71dc0b044aaedcbf89163401d96447bdfb28e16ebfd27b82557cc38ca7b"
+  url "https://files.pythonhosted.org/packages/source/p/pdfdown/pdfdown-0.1.1.tar.gz"
+  sha256 "444abeb8488d84e59690972f53b35afd2e319a25e99042771ae000ed8a916787"
   license "MIT"
 
   depends_on "python@3.14"

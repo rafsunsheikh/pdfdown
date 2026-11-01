@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pdfdown"
-version = "0.1.0"
+version = "0.1.1"
 description = "A terminal app that turns PDFs, especially research articles, into clean Markdown with tables, cropped figures and equations."
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.11,<3.15"
 license = "MIT"
 authors = [{ name = "Md Rafsun Sheikh" }]
 keywords = ["pdf", "markdown", "tui", "research", "latex", "docling"]
@@ -19,6 +19,7 @@ dependencies = [
   "pix2tex>=0.1.4",
   "textual>=0.80",
   "textual-image>=0.8",
+  "mcp>=2.3,<3",
 ]
 classifiers = [
   "Development Status :: 4 - Beta",

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // npm launcher for the pdfdown Python package.
 //
-// pdfdown is written in Python and needs Python 3.10 to 3.14 (3.11 to 3.14 are tested; the
+// pdfdown is written in Python and needs Python 3.11 to 3.14 (3.11 to 3.14 are tested; the
 // npm package pins nothing). This script runs it:
 //   1. uv     ->  uvx --python 3.12 --from pdfdown==<version> pdfdown ...
 //                 (uv downloads Python 3.12 by itself when it is missing)
 //   2. python ->  a private virtual environment in ~/.cache/pdfdown-npm/<version>,
-//                 created once with pip from a Python 3.10 to 3.14 and reused after that.
+//                 created once with pip from a Python 3.11 to 3.14 and reused after that.
 //
 // Environment variables:
 //   PDFDOWN_PYTHON    python executable to use for option 2
@@ -41,8 +41,8 @@ function run(cmd, args) {
 function findPython() {
   const candidates = process.env.PDFDOWN_PYTHON ? [process.env.PDFDOWN_PYTHON]
     : IS_WIN ? ["py -3.12", "py -3.13", "py -3.11", "python"]
-    : ["python3.12", "python3.13", "python3.14", "python3.11", "python3.10", "python3", "python"];
-  const test = "import sys; sys.exit(0 if (3, 10) <= sys.version_info[:2] <= (3, 14) else 1)";
+    : ["python3.12", "python3.13", "python3.14", "python3.11", "python3", "python"];
+  const test = "import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, 14) else 1)";
   for (const py of candidates) {
     const [cmd, ...pre] = py.split(" ");
     if (spawnSync(cmd, [...pre, "-c", test], { stdio: "ignore", shell: IS_WIN }).status === 0) return [cmd, pre];
@@ -57,7 +57,7 @@ function viaVenv() {
   if (!fs.existsSync(exe)) {
     const found = findPython();
     if (!found) {
-      console.error("pdfdown needs Python 3.10 to 3.14. Install uv (https://docs.astral.sh/uv/), which fetches " +
+      console.error("pdfdown needs Python 3.11 to 3.14. Install uv (https://docs.astral.sh/uv/), which fetches " +
                     "the right Python by itself, or Python 3.12 from https://www.python.org/downloads/, then run this again.");
       process.exit(1);
     }

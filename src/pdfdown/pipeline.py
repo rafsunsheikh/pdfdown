@@ -44,3 +44,32 @@ def run(pdf: str | Path, out_dir: str | Path = "pdfdown-output", latex: bool = T
         finally:
             text.close()
     return Result(doc, md)
+
+
+def summary(result: Result) -> dict:
+    """What a person or a coding agent needs to know about a conversion, as plain data (also `pdfdown --batch --json`)."""
+    from pdfdown.export import element_list
+    from pdfdown.quality import scan
+
+    doc, md = result.doc, result.markdown.resolve()
+    elements = element_list(doc)
+    equations = [e for e in elements if e["kind"] == "equation"]
+    as_images = [e for e in equations if e["written_as"] == "image"]
+    return {
+        "source": str(doc.source),
+        "markdown": str(md),
+        "folder": str(md.parent),
+        "pages": len(doc.page_sizes),
+        "figures": sum(e["kind"] == "figure" for e in elements),
+        "tables": sum(e["kind"] == "table" for e in elements),
+        "equations": {
+            "total": len(equations),
+            "latex": len(equations) - len(as_images),
+            "images": len(as_images),
+            "kept_as_images": [{"id": e["id"], "number": e.get("number"), "page": e["page"],
+                                "reason": e.get("check") or "no LaTeX reading (equation reading was off)"}
+                               for e in as_images],
+        },
+        "notes": doc.notes,
+        "problems": [str(f) for f in scan(md)],
+    }

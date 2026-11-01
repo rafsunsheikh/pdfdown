@@ -152,7 +152,45 @@ def write(doc: Document, out_dir: str | Path) -> Path:
     text = re.sub(r"\n{3,}", "\n\n", text)
     md = root / f"{stem}.md"
     md.write_text(text, encoding="utf-8")
+    write_elements(doc, md)
     return md
+
+
+ELEMENTS = "pdfdown-elements.json"
+
+
+def element_list(doc: Document) -> list[dict]:
+    """Every figure, table and equation, as the Markdown has it. Ids match the image files: eq-3, figure-2a, table-1."""
+    out = []
+    for b in doc.blocks:
+        if b.kind not in ("figure", "table", "equation") or not b.extra.get("image"):
+            continue
+        page, box = area(b)
+        item = {"id": Path(b.extra["image"]).stem, "kind": b.kind, "page": page,
+                "box": [round(v, 1) for v in (box.l, box.t, box.r, box.b)], "image": b.extra["image"],
+                "ref": b.extra.get("ref"), "hidden": bool(b.extra.get("hidden"))}
+        if b.extra.get("caption"):
+            item["caption"] = b.extra["caption"]
+        if b.kind == "table":
+            item["written_as"] = ("markdown table" if b.extra.get("grid") and not b.extra.get("spans") and b.extra.get("markdown")
+                                  else "html table" if b.extra.get("html") else "image")
+        if b.kind == "equation":
+            item["number"] = b.extra.get("number")
+            item["written_as"] = "latex" if use_latex(b) else "image"
+            if b.extra.get("latex"):
+                item.update(latex=b.extra["latex"], latex_passed_check=bool(b.extra.get("latex_ok")),
+                            check=b.extra.get("latex_check", ""), latex_by=b.extra.get("latex_by") or b.extra.get("latex_model"))
+        out.append(item)
+    return out
+
+
+def write_elements(doc: Document, md: Path) -> Path:
+    import json
+
+    path = md.parent / ELEMENTS
+    data = {"source": str(doc.source), "markdown": str(md), "elements": element_list(doc)}
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
 
 
 def _next_is(doc: Document, block: Block, kind: str) -> bool:

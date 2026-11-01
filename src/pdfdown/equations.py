@@ -20,6 +20,7 @@ import html
 import re
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from pdfdown.document import Block, Document
@@ -280,27 +281,68 @@ def recognise(doc: Document, root, pdf_text, model: Callable | None = None,
     """Fill in LaTeX for every equation that has an image; returns how many passed the checks."""
     from PIL import Image
 
+    from pdfdown.export import area
+
     equations = [b for b in doc.blocks if b.kind == "equation" and b.extra.get("image") and not b.extra.get("latex_by")]
     if not equations:
         return 0
-    model = model or Pix2Tex()
+    readings = _Readings(Path(root) / READINGS)
     passed = 0
     for i, b in enumerate(equations, start=1):
-        raw = model(Image.open(root / b.extra["image"]))
+        page, box = area(b)
+        key = [page, round(box.l, 1), round(box.t, 1), round(box.r, 1), round(box.b, 1)]
+        raw = readings.get(b.extra.get("ref"), key)
+        if raw is None:  # not read before, or the crop changed
+            model = model or Pix2Tex()
+            raw = model(Image.open(Path(root) / b.extra["image"]))
+            readings.put(b.extra.get("ref"), key, raw)
         latex, number = clean_latex(raw)
-        chars = [c for page, box in b.parts for c in pdf_text.page(page).inside(box)]
-        result = check(latex, chars)
+        result = check(latex, pdf_text.page(page).inside(box))
         b.extra.update(latex=latex, latex_raw=raw, latex_ok=result.ok, latex_check=result.reason,
-                       latex_model=getattr(model, "name", "custom"))
+                       latex_model=getattr(model, "name", "pix2tex"))
         if number:
             b.extra["number"] = number
         passed += result.ok
         if progress:
             progress(i, len(equations), b)
+    readings.save()
     n = len(equations)
     doc.notes.append(f"Read {n} equation{'s' * (n != 1)} as LaTeX: {passed} passed the checks and replace their images, "
                      f"{n - passed} stay as images.")
     return passed
+
+
+READINGS = "pdfdown-readings.json"
+
+
+class _Readings:
+    """The model's reading of each equation, kept beside the Markdown so a re-run (a reconvert, an edit made by a
+    person or an agent) does not read every equation again. A reading is reused only for the same crop."""
+
+    def __init__(self, path: Path) -> None:
+        import json
+
+        self.path = path
+        try:
+            self.data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.data = {}
+        self.changed = False
+
+    def get(self, ref, key):
+        entry = self.data.get(ref) if ref else None
+        return entry["raw"] if entry and entry.get("crop") == key else None
+
+    def put(self, ref, key, raw) -> None:
+        if ref:
+            self.data[ref] = {"crop": key, "raw": raw}
+            self.changed = True
+
+    def save(self) -> None:
+        import json
+
+        if self.changed:
+            self.path.write_text(json.dumps(self.data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def try_harder(block: Block, pdf, pdf_text, model: Callable | None = None,

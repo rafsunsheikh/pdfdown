@@ -1,6 +1,6 @@
 {
   "name": "@mdrafsunsheikh/pdfdown",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Terminal app that turns PDFs, especially research articles, into clean Markdown with tables, cropped figures and checked LaTeX equations. (npm launcher for the pdfdown Python package)",
   "bin": {
     "pdfdown": "bin/pdfdown.js"

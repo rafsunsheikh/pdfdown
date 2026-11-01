@@ -4,6 +4,8 @@
     pdfdown paper.pdf more/*.pdf     open the TUI with these PDFs queued
     pdfdown --batch paper.pdf        convert in the terminal, no TUI (also when output is piped)
     pdfdown check out/paper/paper.md list problems left in a converted file
+    pdfdown --batch --json paper.pdf convert and print a JSON summary, for scripts and coding agents
+    pdfdown mcp                      run as an MCP server, so coding agents can convert PDFs themselves
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--out", type=Path, default=Path("pdfdown-output"),
                    help="output folder; each PDF gets its own subfolder (default: ./pdfdown-output)")
     p.add_argument("--batch", action="store_true", help="convert without the TUI")
+    p.add_argument("--json", action="store_true",
+                   help="with --batch: print one JSON summary on stdout (progress goes to stderr); made for scripts and coding agents")
     p.add_argument("--no-latex", action="store_true", help="keep every equation as an image (skips the 97 MB equation model)")
     p.add_argument("--ocr", action="store_true", help="run OCR, for scanned PDFs without a text layer")
     p.add_argument("--no-tables", action="store_true", help="crop tables as images instead of rebuilding them")
@@ -49,6 +53,11 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["check"]:
         return _check(argv[1:])
+    if argv[:1] == ["mcp"]:
+        from pdfdown.mcp_server import serve
+
+        serve()
+        return 0
     args = _parser().parse_args(argv)
     from pdfdown.engine import EngineOptions
 
@@ -62,33 +71,39 @@ def main(argv: list[str] | None = None) -> int:
         if not pdfs:
             print("pdfdown: give at least one PDF with --batch", file=sys.stderr)
             return 2
-        return _batch(pdfs, args.out, not args.no_latex, options)
+        return _batch(pdfs, args.out, not args.no_latex, options, as_json=args.json)
     from pdfdown.tui.app import PdfdownApp
 
     PdfdownApp(pdfs, args.out, latex=not args.no_latex, options=options).run()
     return 0
 
 
-def _batch(pdfs: list[Path], out: Path, latex: bool, options) -> int:
-    from pdfdown.pipeline import run
+def _batch(pdfs: list[Path], out: Path, latex: bool, options, as_json: bool = False) -> int:
+    import json
 
-    model = None
-    failed = 0
+    from pdfdown.pipeline import run, summary
+
+    say = (lambda text: print(text, file=sys.stderr, flush=True)) if as_json else (lambda text: print(text, flush=True))
+    model = _lazy_model() if latex else None
+    results, failed = [], []
     for n, pdf in enumerate(pdfs, start=1):
         start = time.time()
-        print(f"[{n}/{len(pdfs)}] {pdf.name}", flush=True)
+        say(f"[{n}/{len(pdfs)}] {pdf.name}")
         try:
-            if latex and model is None:
-                model = _lazy_model()
             result = run(pdf, out, latex=latex, options=options, equation_model=model,
-                         progress=lambda message: print(f"    {message}", flush=True))
+                         progress=lambda message: say(f"    {message}"))
         except Exception as error:  # one bad PDF should not stop the batch
-            failed += 1
+            failed.append({"source": str(pdf), "error": str(error)})
             print(f"    failed: {error}", file=sys.stderr)
             continue
-        for note in result.doc.notes:
-            print(f"    - {note}")
-        print(f"    done in {time.time() - start:.0f} s: {result.markdown}")
+        if as_json:
+            results.append(summary(result))
+        else:
+            for note in result.doc.notes:
+                say(f"    - {note}")
+        say(f"    done in {time.time() - start:.0f} s: {result.markdown}")
+    if as_json:
+        print(json.dumps({"results": results, "failed": failed}, indent=2, ensure_ascii=False))
     return 1 if failed else 0
 
 

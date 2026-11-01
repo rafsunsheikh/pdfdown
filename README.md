@@ -3,6 +3,7 @@
 [![PyPI][pypi-shield]][pypi-url]
 [![Python][python-shield]][pypi-url]
 [![Issues][issues-shield]][issues-url]
+[![npm][npm-shield]][npm-url]
 [![License][license-shield]][license-url]
 
 <br />
@@ -43,6 +44,7 @@
       <ul>
         <li><a href="#the-terminal-app">The terminal app</a></li>
         <li><a href="#without-the-app">Without the app</a></li>
+        <li><a href="#with-coding-agents">With coding agents</a></li>
         <li><a href="#what-you-get">What you get</a></li>
       </ul>
     </li>
@@ -78,6 +80,7 @@ Copying text out of a research paper usually gives you broken lines, words split
 * **Superscripts and subscripts survive**, so citations read "prizes<sup>2–9</sup>" and variables read "t<sub>0</sub>".
 * **Clutter is removed:** running headers and footers, page numbers, journal badges and axis labels that leaked into the text.
 * **You stay in control.** In the terminal app you can switch any equation between LaTeX and image, fix its LaTeX with a live check, adjust any crop, or hide an element. Your changes are kept for the next run.
+* **Works with coding agents.** Claude Code and other agents can convert PDFs, read the result section by section, and fix equations through pdfdown's MCP server, under the same LaTeX check ([details](#with-coding-agents)).
 * **Private by design.** Everything runs on your own computer. Your PDFs are never uploaded anywhere, so unpublished or confidential papers are safe to convert.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -86,7 +89,7 @@ Copying text out of a research paper usually gives you broken lines, words split
 
 ### Prerequisites
 
-* macOS or Linux, and **Python 3.10 to 3.14** (or [uv][uv-url], which fetches the right Python by itself).
+* macOS or Linux, and **Python 3.11 to 3.14** (or [uv][uv-url], which fetches the right Python by itself).
 * About **2.5 GB of free disk space**: about 1.3 GB for the program and about 1.1 GB for the page-reading models, which are downloaded once on first use.
 * For sharp image previews inside the app, a terminal that can show pictures, such as Ghostty, kitty, WezTerm or iTerm2. Other terminals show a coarse preview, and the files on disk are full quality either way.
 
@@ -97,8 +100,8 @@ Pick one:
 ```bash
 uv tool install pdfdown                   # recommended
 pipx install pdfdown
-pip install pdfdown                       # inside a Python 3.10 to 3.14 environment
-npm install -g @mdrafsunsheikh/pdfdown      # needs uv or Python 3.10 to 3.14
+pip install pdfdown                       # inside a Python 3.11 to 3.14 environment
+npm install -g @mdrafsunsheikh/pdfdown    # needs uv or Python 3.11 to 3.14
 brew install rafsunsheikh/tap/pdfdown
 ```
 
@@ -166,6 +169,28 @@ Options:
 | `--no-tables` | crop tables as images instead of rebuilding them |
 | `--ocr` | read scanned PDFs that have no text layer |
 | `--device` | `auto` (default), `cpu`, `mps` (Apple GPU) or `cuda` (Nvidia GPU) |
+| `--json` | with `--batch`: print one JSON summary (paths, counts, which equations stayed images and why); progress goes to stderr |
+
+### With coding agents
+
+Coding agents such as Claude Code, Cursor or Claude Desktop can use pdfdown themselves through MCP, the standard way agents call outside tools. Connect it once:
+
+```bash
+claude mcp add pdfdown -- uvx pdfdown mcp      # Claude Code; other agents take the same command: uvx pdfdown mcp
+```
+
+Then just ask, for example: *"Convert ~/papers/attention.pdf and summarise the method section."* The agent gets these tools:
+
+| Tool | What it does |
+| --- | --- |
+| `convert_pdf` | converts a PDF; returns where the Markdown is, the counts, and which equations stayed images and why |
+| `markdown_outline` | the headings with line numbers, so the agent can go straight to a section |
+| `read_markdown` | reads the Markdown a slice at a time, so a long paper never floods the agent's context |
+| `list_elements` | every figure, table and equation, with LaTeX or image status and the reason |
+| `get_element_image` | shows the agent the cropped image of one element |
+| `set_equation_latex` | lets the agent propose LaTeX for an equation that stayed an image; it is kept only if it passes the same check against the PDF, so an agent cannot put unchecked LaTeX in your Markdown |
+
+Everything still runs on your computer: the agent and pdfdown work on the same files, and nothing is uploaded. Without MCP, any agent that can run commands can use `pdfdown --batch --json paper.pdf` instead.
 
 ### What you get
 
@@ -340,3 +365,5 @@ Project link: [github.com/rafsunsheikh/pdfdown][repo-url]
 [ex-physics-arxiv]: https://arxiv.org/abs/2610.06793
 [ex-llama-arxiv]: https://arxiv.org/abs/2302.13971
 [ex-dpo-arxiv]: https://arxiv.org/abs/2305.18290
+[npm-shield]: https://img.shields.io/npm/v/@mdrafsunsheikh/pdfdown.svg?style=for-the-badge
+[npm-url]: https://www.npmjs.com/package/@mdrafsunsheikh/pdfdown
