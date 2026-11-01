@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pdfdown"
-version = "0.1.1"
+version = "0.1.2"
 description = "A terminal app that turns PDFs, especially research articles, into clean Markdown with tables, cropped figures and equations."
 readme = "README.md"
 requires-python = ">=3.11,<3.15"

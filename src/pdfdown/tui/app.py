@@ -115,6 +115,22 @@ def element_label(block: Block, eq_number: int) -> str:
     return f"Eq {eq_number}{tag}  {status}{hidden}"
 
 
+def _start_helper_processes() -> None:
+    """Start Python's multiprocessing resource tracker now, before Textual takes over the terminal.
+
+    Loading the layout model shows a tqdm progress bar, and tqdm's lock starts that tracker. Starting it passes
+    sys.stderr's file descriptor to a child process, but inside a Textual app sys.stderr is a capture object with
+    no real descriptor, and the start fails with "bad value(s) in fds_to_keep": every PDF converted for the first
+    time failed in the app. Once running, the tracker is reused, so later model loads are fine.
+    """
+    try:
+        from multiprocessing import resource_tracker
+
+        resource_tracker.ensure_running()
+    except Exception:  # pragma: no cover - platforms without it simply skip this
+        pass
+
+
 class PdfdownApp(App):
     TITLE = "pdfdown"
     CSS = """
@@ -147,6 +163,7 @@ class PdfdownApp(App):
 
     def __init__(self, pdfs: list[Path] | None = None, out: Path = Path("pdfdown-output"), latex: bool = True,
                  options: EngineOptions | None = None) -> None:
+        _start_helper_processes()
         super().__init__()
         self.out = Path(out).resolve()
         self.latex = latex
@@ -251,6 +268,9 @@ class PdfdownApp(App):
             self.show_job(job)
         elif job.status == "done":
             self.notify(f"{job.pdf.name} is ready")
+        if job.status == "failed":
+            self.notify(f"{job.pdf.name} could not be converted: {escape(message.removeprefix('failed: '))[:300]}. "
+                        "The Log tab (key 6) has the details.", title="Conversion failed", severity="error", timeout=30)
 
     def log_line(self, text: str) -> None:
         self.query_one("#log", RichLog).write(f"[dim]{time.strftime('%H:%M:%S')}[/] {text}")

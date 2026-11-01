@@ -60,3 +60,14 @@ def test_edits_survive_a_rerun(tmp_path):
     (first.markdown.parent / "pdfdown-edits.json").write_text(json.dumps({figure.extra["ref"]: {"hidden": True}}))
     again = run(REPORT, tmp_path, equation_model=FakeModel())
     assert "figures/figure-1.png" not in again.markdown.read_text()
+
+
+@pytest.mark.asyncio
+async def test_first_conversion_in_the_app(tmp_path, monkeypatch):
+    # A PDF never seen before goes through model loading inside the app. That used to fail with
+    # "bad value(s) in fds_to_keep" (tqdm starting a helper process with Textual's stand-in stderr).
+    monkeypatch.setenv("PDFDOWN_CACHE", str(tmp_path / "empty-cache"))
+    app = PdfdownApp([REPORT], tmp_path / "out", latex=False)
+    async with app.run_test(size=(140, 45)) as pilot:
+        await wait_for(pilot, lambda: app.jobs[0].status in ("done", "failed"), seconds=300)
+        assert app.jobs[0].status == "done", app.jobs[0].message
