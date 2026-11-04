@@ -207,7 +207,8 @@ def _render_line(line: list[Char]) -> str:
                 new_mode = "sub"
             elif mode and out and (out[-1] != " " or (len(out) > 1 and out[-2].endswith(","))):
                 new_mode = mode  # in between, right after a script: it continues it ("1, †" after an author)
-        if prev is not None and prev.ch.strip() and c.l - prev.r > 0.12 * main and out and not out[-1].endswith(" "):
+        if (prev is not None and prev.ch.strip() and c.l - prev.r > 0.12 * main and out and not out[-1].endswith(" ")
+                and not (_bengali(prev.ch) and _bengali(c.ch))):  # Bangla leaves gaps inside words: trust the PDF's spaces
             out.append(" ")  # a visible gap without an explicit space character
         if new_mode != mode:
             if mode:
@@ -230,6 +231,16 @@ def _render_line(line: list[Char]) -> str:
 
 
 BIG_OPERATORS = set("√∑∏∫∮⋃⋂⋀⋁∐")  # drawn from small fonts but hanging low; never a script themselves
+
+
+def bengali_share(text: str) -> float:
+    """Share of the letters in `text` that are Bengali script."""
+    letters = [ch for ch in text if ch.isalpha() or _bengali(ch)]
+    return sum(_bengali(ch) for ch in letters) / len(letters) if letters else 0.0
+
+
+def _bengali(ch: str) -> bool:
+    return any("\u0980" <= x <= "\u09ff" for x in ch)
 
 
 def _pt(c: Char) -> float:

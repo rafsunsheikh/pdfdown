@@ -54,7 +54,7 @@ def scan(md_path: str | Path) -> list[Finding]:
     add("unbalanced superscript tags", [l for l in prose if l.count("<sup>") != l.count("</sup>") or l.count("<sub>") != l.count("</sub>")])
     add("paragraphs ending mid-sentence", [l[-60:] for l in prose
                                            if not l.startswith(("-", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-                                           and len(l) > 80 and not re.search(r"[.!?:;)\]\"'”’>]\s*$|<sup>[^<]*</sup>\s*$", l)])
+                                           and len(l) > 80 and not re.search(r"[.!?:;।॥)\]\"'”’>]\s*$|<sup>[^<]*</sup>\s*$", l)])
     counts = Counter(l.strip() for l in md.splitlines() if len(l.strip()) > 40)
     add("duplicated lines", [l for l, n in counts.items() if n > 1])
     caption_heads = Counter(re.sub(r"\W+", " ", m.lower()).strip()

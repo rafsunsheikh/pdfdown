@@ -132,3 +132,11 @@ def test_a_line_that_is_mostly_scripts():
     line = [c("s", 0, 170.4, 9.96, 0), c("2", 4, 167.9, 6.97, 1), c("j", 4.5, 175.0, 6.97, 2), c("α", 9, 175, 6.97, 3),
             c("β", 13, 175, 6.97, 4), c("=", 18, 170.4, 9.96, 5)]
     assert _render_line(line).startswith("s<sup>2</sup><sub>jαβ</sub>")
+
+
+def test_bangla_sentence_ends_and_continues():
+    from pdfdown.cleanup.stitch import _continues
+
+    assert ends_sentence("পদ্মা নদী বাংলাদেশের প্রধান নদী।")
+    assert not ends_sentence("পদ্মা নদী বাংলাদেশের প্রধান")
+    assert _continues("নদী। এটি হিমালয়ে উৎপন্ন")

@@ -20,7 +20,8 @@ STEPS = [
     ("model", "Load the equation reader (once per session)"),
     ("equations", "Read equations as LaTeX and check them against the PDF"),
 ]
-DEFAULTS = {"seconds_per_page": 3.0, "seconds_per_equation": 3.0, "seconds_to_load_reader": 20.0}
+DEFAULTS = {"seconds_per_page": 3.0, "seconds_per_equation": 3.0, "seconds_to_load_reader": 20.0,
+            "seconds_per_ocr_page": 8.0}
 SPEED_FILE = "speed.json"
 
 
@@ -65,6 +66,8 @@ class JobProgress:
     per_page: float = field(default_factory=seconds_per_page)
     per_equation: float = field(default_factory=seconds_per_equation)
     equations: int | None = None  # known once the layout is analysed
+    ocr_pages: int = 0  # pages read with OCR (slower)
+    per_ocr_page: float = field(default_factory=lambda: float(_speeds()["seconds_per_ocr_page"]))
     reader_loaded: bool = False  # the equation reader is already in memory (from an earlier PDF this session)
     to_load: float = field(default_factory=lambda: float(_speeds()["seconds_to_load_reader"]))
     equation_started: float = field(default_factory=time.time)
@@ -72,14 +75,19 @@ class JobProgress:
     def on_step(self, name: str, done: int, total: int) -> None:
         now = time.time()
         if name in ("layout", "layout-cached"):
-            self.pages, self.cached, name = total, name == "layout-cached", "layout"
+            self.pages, self.cached, self.ocr_pages, name = total, name == "layout-cached", done, "layout"
         if name == "cleanup":
             self.equations = total
         if name != self.step:
             if self.step:
                 self.took[self.step] = now - self.step_started
                 if self.step == "layout" and not self.cached and self.pages:
-                    remember_speed("seconds_per_page", self.took["layout"] / self.pages)
+                    text_pages = self.pages - self.ocr_pages
+                    if self.ocr_pages:  # learn the OCR speed from what is left after the text pages
+                        rest = self.took["layout"] - text_pages * self.per_page
+                        remember_speed("seconds_per_ocr_page", max(rest, 0.5) / self.ocr_pages)
+                    else:
+                        remember_speed("seconds_per_page", self.took["layout"] / self.pages)
                 if self.step == "equations" and name == "done" and self.total:
                     remember_speed("seconds_per_equation", self.took["equations"] / self.total)
                 if self.step == "model":
@@ -113,7 +121,8 @@ class JobProgress:
         return 0.5
 
     def layout_estimate(self) -> float:
-        return max(self.pages, 1) * self.per_page
+        text_pages = max(self.pages - self.ocr_pages, 0)
+        return max(text_pages * self.per_page + self.ocr_pages * self.per_ocr_page, 1.0)
 
     def fraction(self, now: float | None = None) -> float:
         now = now or time.time()
@@ -141,6 +150,9 @@ class JobProgress:
                 continue  # already loaded, or not needed because every equation was read before
             if name == "layout" and self.cached:
                 text = "Page layout already analysed (cached)"
+            elif name == "layout" and self.ocr_pages:
+                scans = "every page" if self.ocr_pages == self.pages else f"{self.ocr_pages} scanned page{'s' * (self.ocr_pages != 1)}"
+                text = f"Analyse the page layout and read {scans} with OCR"
             if i < current:
                 seconds = self.took.get(name)
                 out.append(f"[green]✓[/] {text}" + (f"  [dim]{seconds:.0f} s[/]" if seconds and seconds >= 1 else ""))

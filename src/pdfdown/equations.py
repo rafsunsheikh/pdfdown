@@ -284,7 +284,11 @@ def recognise(doc: Document, root, pdf_text, model: Callable | None = None,
 
     from pdfdown.export import area
 
-    equations = [b for b in doc.blocks if b.kind == "equation" and b.extra.get("image") and not b.extra.get("latex_by")]
+    for b in doc.blocks:
+        if b.kind == "equation" and b.page in doc.ocr_pages:
+            b.extra["latex_check"] = "this page was read with OCR, so there is no PDF text to check LaTeX against"
+    equations = [b for b in doc.blocks if b.kind == "equation" and b.extra.get("image") and not b.extra.get("latex_by")
+                 and b.page not in doc.ocr_pages]
     if not equations:
         return 0
     readings = _Readings(Path(root) / READINGS)

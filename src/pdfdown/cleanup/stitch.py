@@ -14,7 +14,7 @@ import re
 
 from pdfdown.document import Document
 
-END = re.compile(r"""[.!?:;](?:["'”’)\]]|</sup>|\s*<sup>[^<]*</sup>)*\s*$""")
+END = re.compile(r"""[.!?:;।॥](?:["'”’)\]]|</sup>|\s*<sup>[^<]*</sup>)*\s*$""")  # । ends a Bangla sentence
 FLOATING = {"figure", "table", "footnote", "caption"}
 
 
@@ -60,4 +60,6 @@ def run(doc: Document, pdf=None) -> None:
 def _continues(text: str) -> bool:
     """A continuation starts in lowercase, with a digit, or with punctuation, never with a new heading-like line."""
     stripped = re.sub(r"^<su[bp]>[^<]*</su[bp]>", "", text.lstrip())
-    return bool(stripped) and (stripped[0].islower() or stripped[0].isdigit() or stripped[0] in ",;:)]–-")
+    # Bangla has no capitals: a Bangla word carries a sentence on when the part before it has not ended (checked by END).
+    return bool(stripped) and (stripped[0].islower() or stripped[0].isdigit() or stripped[0] in ",;:)]–-"
+                               or "\u0980" <= stripped[0] <= "\u09ff")

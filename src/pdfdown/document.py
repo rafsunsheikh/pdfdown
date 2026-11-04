@@ -67,6 +67,7 @@ class Document:
     page_sizes: dict[int, tuple[float, float]]  # page -> (width, height) in points
     title: str = ""
     notes: list[str] = field(default_factory=list)  # what the cleanup did, shown in the TUI and the report
+    ocr_pages: list[int] = field(default_factory=list)  # pages whose text came from OCR, not from the PDF's text layer
 
     def of_kind(self, *kinds: str) -> list[Block]:
         return [b for b in self.blocks if b.kind in kinds]

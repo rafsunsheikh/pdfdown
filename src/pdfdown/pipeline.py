@@ -36,12 +36,20 @@ def run(pdf: str | Path, out_dir: str | Path = "pdfdown-output", latex: bool = T
     with pdfium_lock:
         import pypdfium2 as pdfium
 
+        from pdfdown.engine import scanned_pages
+
+        options = options or EngineOptions()
         document = pdfium.PdfDocument(str(pdf))
         pages = len(document)
+        ocr_pages = (list(range(1, pages + 1)) if options.ocr == "all"
+                     else scanned_pages(document) if options.ocr == "auto" else [])
         document.close()
-    cached = cache_path(pdf, options or EngineOptions()).is_file()
-    mark("layout-cached" if cached else "layout", 0, pages)
-    doc = from_docling(convert(pdf, options, progress=say), pdf)
+    cached = cache_path(pdf, options).is_file()
+    mark("layout-cached" if cached else "layout", len(ocr_pages), pages)
+    doc = from_docling(convert(pdf, options, progress=say, scanned=ocr_pages), pdf)
+    doc.ocr_pages = ocr_pages
+    if ocr_pages:
+        doc.notes.append(_ocr_note(ocr_pages, pages, options))
     with pdfium_lock:  # Docling has finished with pdfium; everything below reads the PDF directly
         text = PdfText(pdf)
         try:
@@ -99,7 +107,24 @@ def summary(result: Result) -> dict:
                                 "reason": e.get("check") or "no LaTeX reading (equation reading was off)"}
                                for e in as_images],
         },
+        "ocr_pages": doc.ocr_pages,
         "notes": doc.notes,
         "problems": [str(f) for f in scan(md)],
     }
 
+
+
+def _ocr_note(ocr_pages: list[int], pages: int, options: EngineOptions) -> str:
+    if options.ocr == "all":
+        which = "Every page was"
+    else:
+        ranges, start = [], None
+        for i, p in enumerate(ocr_pages):
+            start = p if start is None else start
+            if i + 1 == len(ocr_pages) or ocr_pages[i + 1] != p + 1:
+                ranges.append(f"{start}" if start == p else f"{start}-{p}")
+                start = None
+        which = f"Page{'s' * (len(ocr_pages) != 1)} {', '.join(ranges)} {'have' if len(ocr_pages) != 1 else 'has'} no text layer, so"
+        which += " it was" if len(ocr_pages) == 1 else " they were"
+    return (f"{which} read with OCR (text recognition from the page image). On those pages, superscripts and "
+            "subscripts are not restored and equations stay images, because there is no PDF text to check against.")

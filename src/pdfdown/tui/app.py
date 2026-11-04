@@ -82,6 +82,7 @@ class Job:
     doc: Document | None = None
     markdown: Path | None = None
     progress: JobProgress | None = None
+    options: EngineOptions | None = None  # per-file choice, such as "read every page with OCR"
 
     def label(self) -> str:
         if self.status == "converting" and self.progress:
@@ -165,6 +166,7 @@ class PdfdownApp(App):
         Binding("v", "view", "Open image", show=False),
         Binding("o", "open_folder", "Open folder"),
         Binding("R", "reconvert", "Reconvert", show=False),
+        Binding("O", "reconvert_ocr", "OCR all pages", show=False),
         Binding("q", "quit", "Quit"),
     ] + [Binding(str(n), f"tab('{tab}')", tab.capitalize(), show=False)
          for n, tab in enumerate(("markdown", "source", "element", "page", "report", "log"), start=1)]
@@ -264,7 +266,7 @@ class PdfdownApp(App):
             job.progress = JobProgress(latex=self.latex, reader_loaded=bool(getattr(self._model, "loaded", False)))
             self.call_from_thread(self.job_changed, job, "starting")
             try:
-                result = run(job.pdf, self.out, latex=self.latex, options=self.options, equation_model=self._model,
+                result = run(job.pdf, self.out, latex=self.latex, options=job.options or self.options, equation_model=self._model,
                              progress=lambda message, job=job: self.call_from_thread(self.job_changed, job, message),
                              step=lambda name, done, total, job=job: self.call_from_thread(job.progress.on_step, name, done, total))
             except Exception as error:  # show it, then carry on with the next PDF
@@ -645,9 +647,25 @@ class PdfdownApp(App):
         except OSError:
             self.notify(f"Could not open {path}", severity="error")
 
+    def action_reconvert_ocr(self) -> None:
+        """Convert the selected PDF again, reading every page with OCR (for a scan whose text layer is wrong)."""
+        from dataclasses import replace
+
+        job = self.watching or self.current
+        if not job or job.status not in ("done", "failed"):
+            self.notify("Pick a converted PDF first", severity="warning")
+            return
+        job.options = replace(job.options or self.options, ocr="all")
+        self.notify(f"Converting {job.pdf.name} again, reading every page with OCR")
+        self._requeue(job)
+
     def action_reconvert(self) -> None:
         job = self.current
         if job and job.status in ("done", "failed"):
+            self._requeue(job)
+
+    def _requeue(self, job: Job) -> None:
+        if job.status in ("done", "failed"):
             job.status = "queued"
             with self._queue_lock:
                 start = not self._converting

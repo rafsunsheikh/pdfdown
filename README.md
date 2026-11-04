@@ -45,6 +45,7 @@
         <li><a href="#the-terminal-app">The terminal app</a></li>
         <li><a href="#without-the-app">Without the app</a></li>
         <li><a href="#with-coding-agents">With coding agents</a></li>
+        <li><a href="#scanned-pdfs-and-bangla">Scanned PDFs and Bangla</a></li>
         <li><a href="#what-you-get">What you get</a></li>
       </ul>
     </li>
@@ -71,7 +72,8 @@
 
 Copying text out of a research paper usually gives you broken lines, words split by hyphens, two columns mixed together, page headers in the middle of sentences, and no figures. pdfdown gives you a Markdown file you can read, search, quote and edit:
 
-* **Any PDF, research articles first.** Journal articles and preprints, office documents and slides exported to PDF.
+* **Any PDF, research articles first.** Journal articles and preprints, office documents and slides exported to PDF, and scanned pages, which are found and read with OCR by themselves.
+* **Bangla too.** Bangla PDFs and Bangla scans, with `--lang bn` for scans ([details](#scanned-pdfs-and-bangla)).
 * **Columns become one column.** Two-column and multi-column pages are read in the right order and written as a single column.
 * **Continuous sentences.** Line breaks inside paragraphs are removed and hyphenated words are joined again, so paragraph breaks appear only where the paper has them. A paragraph cut off by a column, page or figure is stitched back together.
 * **Tables are rebuilt** as Markdown tables, or as HTML tables when they have merged cells.
@@ -149,6 +151,7 @@ Keys:
 | `v` | open the selected image in your image viewer |
 | `o` | open the output folder |
 | `R` | convert the selected PDF again |
+| `O` | convert the selected PDF again, reading every page with OCR (for a scan whose built-in text is wrong) |
 | `1` to `6` | switch tabs: Markdown, Source, Element, Page, Report, Log |
 | `q` | quit |
 
@@ -167,7 +170,8 @@ Options:
 | `-o, --out DIR` | where to write; each PDF gets its own folder (default `./pdfdown-output`) |
 | `--no-latex` | keep every equation as an image |
 | `--no-tables` | crop tables as images instead of rebuilding them |
-| `--ocr` | read scanned PDFs that have no text layer |
+| `--ocr auto\|all\|off` | `auto` (default): read pages that have no text layer with OCR; `all` (or just `--ocr`): read every page with OCR, for scans whose built-in text is wrong; `off`: never |
+| `--lang bn` | the document is in Bangla: use the OCR engine that reads Bangla |
 | `--device` | `auto` (default), `cpu`, `mps` (Apple GPU) or `cuda` (Nvidia GPU) |
 | `--json` | with `--batch`: print one JSON summary (paths, counts, which equations stayed images and why); progress goes to stderr |
 
@@ -183,7 +187,7 @@ Then just ask, for example: *"Convert ~/papers/attention.pdf and summarise the m
 
 | Tool | What it does |
 | --- | --- |
-| `convert_pdf` | converts a PDF; returns where the Markdown is, the counts, and which equations stayed images and why |
+| `convert_pdf` | converts a PDF (options: `ocr` and `language`, for example `bn`); returns where the Markdown is, the counts, which pages were read with OCR, and which equations stayed images and why |
 | `markdown_outline` | the headings with line numbers, so the agent can go straight to a section |
 | `read_markdown` | reads the Markdown a slice at a time, so a long paper never floods the agent's context |
 | `list_elements` | every figure, table and equation, with LaTeX or image status and the reason |
@@ -191,6 +195,26 @@ Then just ask, for example: *"Convert ~/papers/attention.pdf and summarise the m
 | `set_equation_latex` | lets the agent propose LaTeX for an equation that stayed an image; it is kept only if it passes the same check against the PDF, so an agent cannot put unchecked LaTeX in your Markdown |
 
 Everything still runs on your computer: the agent and pdfdown work on the same files, and nothing is uploaded. Without MCP, any agent that can run commands can use `pdfdown --batch --json paper.pdf` instead.
+
+### Scanned PDFs and Bangla
+
+pdfdown checks every page for a text layer. A page that is only an image, like a scan, is read with OCR (text recognition from the image) without you asking, and the Report says which pages. Everything still runs on your computer.
+
+```bash
+pdfdown --batch scan.pdf                 # scanned pages are found and read by themselves
+pdfdown --batch --ocr all old-scan.pdf   # read every page, for a scan whose built-in text is wrong
+pdfdown --batch --lang bn boi.pdf        # a Bangla document: Bangla OCR for any scanned pages
+```
+
+How well it reads, measured with `scripts/ocr_bench` on scans made from real papers, where the right text is known (share of words wrong):
+
+| | Clean scan (200 dpi) | Photocopy-like scan (150 dpi, tilted, speckled) |
+| --- | --- | --- |
+| English (two machine-learning papers) | 2.6% to 3.4% | 5.6% to 9.9% |
+| Bangla (three Wikipedia articles) | 9.8% to 16.7% | 15.4% to 20.8% |
+| Bangla PDF with real text, no OCR | 8.3% to 17.0% (0.7% to 1.6% of characters) | |
+
+Most Bangla word errors are a single wrong vowel sign or a split word: 4% to 13% of characters are wrong on scans. Math-heavy pages read worst, because OCR reads equations as text.
 
 ### What you get
 
@@ -316,7 +340,8 @@ Several good open-source tools convert PDFs to Markdown. This is how pdfdown com
 
 * **Many equations stay as images.** That is on purpose: LaTeX is used only when it can be verified. In the papers tested, between a fifth and a half of the display equations came out as LaTeX (fewer in notation-heavy physics, more in machine learning papers); you can fix the rest in the app with `e` or `h`.
 * **Inline math** inside sentences is kept as text with superscripts and subscripts, not converted to LaTeX. Simple inline math reads well ("λ<sup>t−1</sup>", "W ∈ R<sup>K×H</sup>"), but fractions, roots and stacked symbols inside a sentence come out flattened or out of order, especially in math-heavy physics papers.
-* **Scanned PDFs** need `--ocr`, and their equations always stay as images, because there is no text to check the LaTeX against.
+* **Scanned pages** lose pdfdown's text repairs: superscripts and subscripts are not restored, and equations stay images, because there is no PDF text to check against. OCR has been measured on clean and photocopy-like scans made from real papers (below), not yet on old or damaged originals.
+* **Bangla PDFs in older Bijoy-style fonts** (SutonnyMJ and similar) store their text as Latin letters, so the text comes out garbled. Reading the pages with `--ocr all --lang bn` should get around it, but this has not been tested on such files yet.
 * **Tested on macOS.** Linux should work but has not been tested yet. Windows is not supported yet.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

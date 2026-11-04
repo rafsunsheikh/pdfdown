@@ -74,7 +74,7 @@ def _elements(md: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-async def _convert(pdf: Path, out_dir: Path, read_equations: bool, ctx: Context | None):
+async def _convert(pdf: Path, out_dir: Path, read_equations: bool, ctx: Context | None, options=None):
     """Run the pipeline in a worker thread, passing its progress messages to the agent."""
     from pdfdown.pipeline import run
 
@@ -91,12 +91,12 @@ async def _convert(pdf: Path, out_dir: Path, read_equations: bool, ctx: Context 
 
     model = _equation_model() if read_equations else None
     return await anyio.to_thread.run_sync(
-        lambda: run(pdf, out_dir, latex=read_equations, equation_model=model, progress=progress))
+        lambda: run(pdf, out_dir, latex=read_equations, options=options, equation_model=model, progress=progress))
 
 
 @server.tool()
-async def convert_pdf(path: str, output_dir: str | None = None, read_equations: bool = True,
-                      ctx: Context | None = None) -> dict[str, Any]:
+async def convert_pdf(path: str, output_dir: str | None = None, read_equations: bool = True, ocr: str = "auto",
+                      language: str = "", ctx: Context | None = None) -> dict[str, Any]:
     """Convert a PDF to Markdown, with figures, tables and equations cropped into image files.
 
     Args:
@@ -105,6 +105,9 @@ async def convert_pdf(path: str, output_dir: str | None = None, read_equations: 
             next to the PDF.
         read_equations: read display equations as LaTeX (checked against the PDF). False keeps every equation
             as an image and is faster.
+        ocr: "auto" (default) reads pages without a text layer (scans) with OCR; "all" reads every page with OCR,
+            for scans whose text layer is wrong or garbled; "off" never uses OCR.
+        language: the document's language for OCR, for example "bn" for Bangla; default English.
 
     Returns where the Markdown is, counts of figures, tables and equations, which equations stayed images and
     why, what the cleanup did, and possible problems left. Read the Markdown with read_markdown.
@@ -113,7 +116,11 @@ async def convert_pdf(path: str, output_dir: str | None = None, read_equations: 
 
     pdf = _pdf(path)
     out = Path(output_dir).expanduser().resolve() if output_dir else pdf.parent / "pdfdown-output"
-    result = await _convert(pdf, out, read_equations, ctx)
+    if ocr not in ("auto", "all", "off"):
+        raise ToolError('ocr must be "auto", "all" or "off"')
+    from pdfdown.cli import engine_options
+
+    result = await _convert(pdf, out, read_equations, ctx, engine_options(ocr=ocr, lang=language))
     return summary(result)
 
 

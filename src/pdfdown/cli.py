@@ -31,11 +31,23 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true",
                    help="with --batch: print one JSON summary on stdout (progress goes to stderr); made for scripts and coding agents")
     p.add_argument("--no-latex", action="store_true", help="keep every equation as an image (skips the 97 MB equation model)")
-    p.add_argument("--ocr", action="store_true", help="run OCR, for scanned PDFs without a text layer")
+    p.add_argument("--ocr", nargs="?", const="all", default="auto", choices=["auto", "all", "off"],
+                   help="auto (default): read pages that have no text layer with OCR; all (also plain --ocr): read every "
+                        "page with OCR, for PDFs whose text layer is wrong; off: never")
+    p.add_argument("--lang", default="", metavar="CODES",
+                   help="language of the text, for OCR: for example bn for Bangla (with English), or en (default)")
     p.add_argument("--no-tables", action="store_true", help="crop tables as images instead of rebuilding them")
     p.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"], help="where the layout models run")
     p.add_argument("--version", action="version", version=f"pdfdown {__version__}")
     return p
+
+
+def engine_options(tables: bool = True, ocr: str = "auto", lang: str = "", device: str = "auto"):
+    """Engine options from user-facing choices; a language that the default OCR engine cannot read picks one that can."""
+    from pdfdown.engine import EngineOptions, ocr_choice
+
+    engine, languages = ocr_choice(lang)
+    return EngineOptions(tables=tables, ocr=ocr, ocr_engine=engine, ocr_lang=languages, device=device)
 
 
 def expand(paths: list[Path]) -> list[Path]:
@@ -61,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     from pdfdown.engine import EngineOptions
 
-    options = EngineOptions(tables=not args.no_tables, ocr=args.ocr, device=args.device)
+    options = engine_options(tables=not args.no_tables, ocr=args.ocr, lang=args.lang, device=args.device)
     pdfs = expand(args.pdfs)
     missing = [p for p in pdfs if not p.is_file()]
     if missing:

@@ -9,3 +9,5 @@ corpus/*.pdf
 !corpus/office-slides.pdf
 docs/recording/frames/
 pdfdown-output/
+!corpus/bangla-sample.pdf
+!corpus/bangla-sample-scan.pdf

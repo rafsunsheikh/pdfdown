@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from pdfdown.document import Document
-from pdfdown.pdftext import PdfText, block_text, vocabulary
+from pdfdown.pdftext import bengali_share, PdfText, block_text, vocabulary
 
 REBUILT = {"title", "heading", "paragraph", "list_item", "caption", "footnote", "reference"}
 
@@ -22,8 +22,10 @@ def run(doc: Document, pdf: PdfText) -> None:
     vocab = vocabulary(pdf, sorted(doc.page_sizes))
     rebuilt = 0
     for b in doc.blocks:
-        if b.kind not in REBUILT or not b.parts:
-            continue
+        if b.kind not in REBUILT or not b.parts or b.page in doc.ocr_pages:
+            continue  # OCR pages have no (or no trustworthy) characters to rebuild from
+        if bengali_share(b.text) > 0.3:
+            continue  # Bangla: Docling's reading is right (0.7-1.6% characters wrong) and a character rebuild is not
         text, seen = block_text(pdf, b.parts, vocab)
         old = re.sub(r"\s+", "", b.text)
         # Accept the rebuilt text when it covers roughly the same characters as Docling's.
