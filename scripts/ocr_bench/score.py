@@ -22,7 +22,7 @@ from rapidfuzz.distance import Levenshtein
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = ROOT / "out/ocr-bench"
-ENGINES = {"en": ["rapidocr", "mac", "easyocr"], "bn": ["easyocr", "rapidocr", "mac"]}
+ENGINES = {"en": ["rapidocr", "mac", "easyocr"], "bn": ["tesseract", "easyocr", "rapidocr", "mac"]}
 
 
 def plain(markdown: str) -> str:
@@ -47,7 +47,9 @@ def convert(pdf: Path, engine: str | None, lang: str) -> tuple[str, float]:
     from pdfdown.pipeline import run
 
     languages = ("bn", "en") if lang == "bn" else ()
-    options = EngineOptions(ocr="auto", ocr_engine=engine or "auto", ocr_lang=languages if engine in ("easyocr", "mac") else ())
+    if engine == "tesseract":
+        languages = ("bn",) if lang == "bn" else ("en",)
+    options = EngineOptions(ocr="auto", ocr_engine=engine or "auto", ocr_lang=languages if engine in ("easyocr", "mac", "tesseract") else ())
     start = time.time()
     result = run(pdf, BENCH / "runs" / (engine or "text"), latex=False, options=options)
     return result.markdown.read_text(encoding="utf-8"), time.time() - start

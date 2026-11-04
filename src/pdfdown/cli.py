@@ -4,6 +4,7 @@
     pdfdown paper.pdf more/*.pdf     open the TUI with these PDFs queued
     pdfdown --batch paper.pdf        convert in the terminal, no TUI (also when output is piped)
     pdfdown check out/paper/paper.md list problems left in a converted file
+    pdfdown setup                    download every model now (the installers run this)
     pdfdown --batch --json paper.pdf convert and print a JSON summary, for scripts and coding agents
     pdfdown mcp                      run as an MCP server, so coding agents can convert PDFs themselves
 """
@@ -35,7 +36,7 @@ def _parser() -> argparse.ArgumentParser:
                    help="auto (default): read pages that have no text layer with OCR; all (also plain --ocr): read every "
                         "page with OCR, for PDFs whose text layer is wrong; off: never")
     p.add_argument("--lang", default="", metavar="CODES",
-                   help="language of the text, for OCR: for example bn for Bangla (with English), or en (default)")
+                   help="language of the text, for OCR: bn for Bangla, bn+en for Bangla with English words, en (default)")
     p.add_argument("--no-tables", action="store_true", help="crop tables as images instead of rebuilding them")
     p.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"], help="where the layout models run")
     p.add_argument("--version", action="version", version=f"pdfdown {__version__}")
@@ -61,10 +62,44 @@ def expand(paths: list[Path]) -> list[Path]:
     return out
 
 
+def _windows_runtime_hint() -> None:
+    """PyTorch on Windows needs the Microsoft Visual C++ Runtime. The installers add it; after a plain `pip install`
+    it may be missing, and the first conversion would then fail with a cryptic DLL error. Say how to fix it."""
+    if sys.platform != "win32":
+        return
+    import winreg
+
+    for key in (r"SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64",
+                r"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"):
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key) as handle:
+                if winreg.QueryValueEx(handle, "Installed")[0] == 1:
+                    return
+        except OSError:
+            continue
+    print("pdfdown: the Microsoft Visual C++ Runtime is not installed, and the layout models need it. Install it with\n"
+          "    winget install Microsoft.VCRedist.2015+.x64\n"
+          "or from https://aka.ms/vs/17/release/vc_redist.x64.exe, then run pdfdown again.", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    for stream in (sys.stdout, sys.stderr):
+        # Windows writes to a pipe in the old code page (cp1252), which cannot hold Bangla or most file names in
+        # other scripts: `pdfdown --batch --json` piped to an agent would crash. Always write UTF-8.
+        if hasattr(stream, "reconfigure") and (stream.encoding or "").lower().replace("-", "") != "utf8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    _windows_runtime_hint()
     if argv[:1] == ["check"]:
         return _check(argv[1:])
+    if argv[:1] == ["setup"]:
+        if set(argv[1:]) & {"-h", "--help"}:
+            print("usage: pdfdown setup\n\nDownload every model pdfdown can need (about 1 GB), so the first conversion "
+                  "runs at full speed and later ones work offline. Running it again only checks them.")
+            return 0
+        from pdfdown.setup import run
+
+        return run()
     if argv[:1] == ["mcp"]:
         from pdfdown.mcp_server import serve
 

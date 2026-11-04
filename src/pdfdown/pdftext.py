@@ -58,6 +58,7 @@ class PageText:
 
     def __init__(self, page: pdfium.PdfPage):
         self.height = page.get_height()
+        self.width = page.get_width()
         tp = page.get_textpage()
         self.chars: list[Char] = []
         font_name = ctypes.create_string_buffer(256)
@@ -80,8 +81,22 @@ class PageText:
                 ch = CMEX.get(ch, "")
                 if not ch:
                     continue
+            if not -1 <= (l + r) / 2 <= self.width + 1 or not -1 <= self.height - (bottom + top) / 2 <= self.height + 1:
+                continue  # off the page: some books are cut from two-page spreads that keep the other half beside it
             self.chars.append(Char(LIGATURES.get(ch, ch), l, self.height - top, r, self.height - bottom, size, generated, i,
                                    _point_size(tp, i, matrix), font if ch.isalnum() else ""))
+
+    def text_in(self, box: Box) -> str:
+        """The text in a box in the order the PDF stores it, not by position (Bijoy blocks need it: their vowel
+        signs are stored before or after the letter they sit on). A character belongs to the box its centre is in,
+        so a vowel sign hanging below the last line of one paragraph does not start the next one."""
+        out, last = [], None
+        for c in sorted(self.inside(box), key=lambda c: c.idx):
+            if last is not None and c.idx > last + 1 and out and not out[-1].isspace() and not c.ch.isspace():
+                out.append(" ")  # a line break pdfium stored between them
+            out.append(c.ch)
+            last = c.idx
+        return "".join(out)
 
     def inside(self, box: Box, slack: float = 1.0) -> list[Char]:
         return [c for c in self.chars
@@ -110,6 +125,9 @@ class PdfText:
     def __init__(self, path: str | Path):
         self.pdf = pdfium.PdfDocument(str(path))
         self._pages: dict[int, PageText] = {}
+
+    def text_in(self, number: int, box: Box) -> str:
+        return self.page(number).text_in(box)
 
     def page(self, number: int) -> PageText:
         if number not in self._pages:

@@ -3,6 +3,8 @@
 //
 // pdfdown is written in Python and needs Python 3.11 to 3.14 (3.11 to 3.14 are tested; the
 // npm package pins nothing). This script runs it:
+//   0. missing pieces are installed first with the bundled installer (install.ps1 on Windows: the
+//      Visual C++ Runtime and uv; install.sh elsewhere: uv), so nothing has to be set up by hand
 //   1. uv     ->  uvx --python 3.12 --from pdfdown==<version> pdfdown ...
 //                 (uv downloads Python 3.12 by itself when it is missing)
 //   2. python ->  a private virtual environment in ~/.cache/pdfdown-npm/<version>,
@@ -80,9 +82,49 @@ function viaVenv() {
   run(exe, ARGS);
 }
 
+function findUvx() {
+  if (has("uvx")) return "uvx";
+  const home = os.homedir();
+  for (const dir of [path.join(home, ".local", "bin"), path.join(home, ".cargo", "bin")]) {
+    const exe = path.join(dir, IS_WIN ? "uvx.exe" : "uvx");
+    if (fs.existsSync(exe)) return exe;
+  }
+  return null;
+}
+
+// Install what is missing with the same installer as the website one-liner, in "dependencies only" mode:
+// on Windows the Visual C++ Runtime (PyTorch needs it) and uv; elsewhere uv. uv brings its own Python.
+function installDependencies() {
+  const env = { ...process.env, PDFDOWN_DEPS_ONLY: "1" };
+  const here = path.join(__dirname, "..");
+  console.error("pdfdown: installing what pdfdown needs (one time only) ...");
+  const r = IS_WIN
+    ? spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(here, "install.ps1")],
+                { stdio: "inherit", env })
+    : spawnSync("sh", [path.join(here, "install.sh")], { stdio: "inherit", env });
+  return r.status === 0;
+}
+
+function windowsRuntimeChecked() {
+  // Check the Visual C++ Runtime once per version; uv may be there already while the runtime is not.
+  const marker = path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "pdfdown-npm",
+                           `${VERSION}.deps`);
+  if (fs.existsSync(marker)) return;
+  if (installDependencies()) {
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, "ok\n");
+  }
+}
+
 const forced = process.env.PDFDOWN_LAUNCHER;
-if ((!forced || forced === "uvx") && has("uvx")) {
-  run("uvx", ["--python", "3.12", "--from", SPEC, "pdfdown", ...ARGS]);
+if (IS_WIN && !forced) windowsRuntimeChecked();
+let uvx = forced === "venv" ? null : findUvx();
+if (!uvx && !forced && !findPython()) {
+  installDependencies();
+  uvx = findUvx();
+}
+if (uvx) {
+  run(uvx, ["--python", "3.12", "--from", SPEC, "pdfdown", ...ARGS]);
 } else {
   viaVenv();
 }

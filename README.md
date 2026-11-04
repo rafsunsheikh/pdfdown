@@ -73,7 +73,7 @@
 Copying text out of a research paper usually gives you broken lines, words split by hyphens, two columns mixed together, page headers in the middle of sentences, and no figures. pdfdown gives you a Markdown file you can read, search, quote and edit:
 
 * **Any PDF, research articles first.** Journal articles and preprints, office documents and slides exported to PDF, and scanned pages, which are found and read with OCR by themselves.
-* **Bangla too.** Bangla PDFs and Bangla scans, with `--lang bn` for scans ([details](#scanned-pdfs-and-bangla)).
+* **Bangla too.** Unicode Bangla PDFs, older PDFs set in Bijoy fonts such as SutonnyMJ, and Bangla scans ([details](#scanned-pdfs-and-bangla)).
 * **Columns become one column.** Two-column and multi-column pages are read in the right order and written as a single column.
 * **Continuous sentences.** Line breaks inside paragraphs are removed and hyphenated words are joined again, so paragraph breaks appear only where the paper has them. A paragraph cut off by a column, page or figure is stitched back together.
 * **Tables are rebuilt** as Markdown tables, or as HTML tables when they have merged cells.
@@ -97,15 +97,38 @@ Copying text out of a research paper usually gives you broken lines, words split
 
 ### Installation
 
-Pick one:
+**Windows** (Windows 10 or 11, 64-bit): open PowerShell and paste
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/install.ps1 | iex"
+```
+
+**macOS or Linux:** open a terminal and paste
 
 ```bash
-uv tool install pdfdown                   # recommended
+curl -LsSf https://raw.githubusercontent.com/rafsunsheikh/pdfdown/main/install.sh | sh
+```
+
+The installer adds whatever is missing and skips what is already there:
+* on Windows, the Microsoft Visual C++ Runtime (Windows asks for permission once) and Windows Terminal;
+* uv, which brings its own Python, so you do not need to install Python;
+* pdfdown, with everything it uses, including the OCR engine for scanned Bangla books;
+* the models (about 1 GB), so the first PDF converts at full speed and later ones work offline;
+* on Windows, a pdfdown shortcut in the Start menu.
+
+It takes 10 to 20 minutes on a home connection. Run the same command again to update pdfdown.
+
+**Other ways**, if you prefer a package manager:
+
+```bash
+uv tool install pdfdown                   # then: pdfdown setup
 pipx install pdfdown
 pip install pdfdown                       # inside a Python 3.11 to 3.14 environment
-npm install -g @mdrafsunsheikh/pdfdown    # needs uv or Python 3.11 to 3.14
+npm install -g @mdrafsunsheikh/pdfdown    # installs uv (and on Windows the C++ runtime) itself if missing
 brew install rafsunsheikh/tap/pdfdown
 ```
+
+These install pdfdown with everything it uses; the models download on the first conversion, or ahead with `pdfdown setup`. On macOS 14 and older, Bangla scans use a less accurate built-in OCR engine unless the `tesseract` program is installed (`brew install tesseract`; the Homebrew install includes it).
 
 Check it:
 
@@ -171,7 +194,7 @@ Options:
 | `--no-latex` | keep every equation as an image |
 | `--no-tables` | crop tables as images instead of rebuilding them |
 | `--ocr auto\|all\|off` | `auto` (default): read pages that have no text layer with OCR; `all` (or just `--ocr`): read every page with OCR, for scans whose built-in text is wrong; `off`: never |
-| `--lang bn` | the document is in Bangla: use the OCR engine that reads Bangla |
+| `--lang bn` | the document is in Bangla (found by itself in most cases); `bn+en` keeps English words too |
 | `--device` | `auto` (default), `cpu`, `mps` (Apple GPU) or `cuda` (Nvidia GPU) |
 | `--json` | with `--batch`: print one JSON summary (paths, counts, which equations stayed images and why); progress goes to stderr |
 
@@ -203,18 +226,25 @@ pdfdown checks every page for a text layer. A page that is only an image, like a
 ```bash
 pdfdown --batch scan.pdf                 # scanned pages are found and read by themselves
 pdfdown --batch --ocr all old-scan.pdf   # read every page, for a scan whose built-in text is wrong
-pdfdown --batch --lang bn boi.pdf        # a Bangla document: Bangla OCR for any scanned pages
+pdfdown --batch boi.pdf                  # a Bangla scan: the language is found from the page images
+pdfdown --batch --lang bn+en boi.pdf     # Bangla with English words in it
 ```
+
+pdfdown finds out by itself that a document is in Bangla, from its text or, for a scan with no text at all, from the shape of the letters on the pages.
 
 How well it reads, measured with `scripts/ocr_bench` on scans made from real papers, where the right text is known (share of words wrong):
 
 | | Clean scan (200 dpi) | Photocopy-like scan (150 dpi, tilted, speckled) |
 | --- | --- | --- |
 | English (two machine-learning papers) | 2.6% to 3.4% | 5.6% to 9.9% |
-| Bangla (three Wikipedia articles) | 9.8% to 16.7% | 15.4% to 20.8% |
+| Bangla (three Wikipedia articles) | 2.0% to 4.2% | 15.4% to 20.8% |
 | Bangla PDF with real text, no OCR | 8.3% to 17.0% (0.7% to 1.6% of characters) | |
 
-Most Bangla word errors are a single wrong vowel sign or a split word: 4% to 13% of characters are wrong on scans. Math-heavy pages read worst, because OCR reads equations as text.
+Most Bangla word errors are a single wrong vowel sign or a split word: 0.4% to 0.9% of characters are wrong on clean scans and 7% to 13% on speckled ones. Math-heavy pages read worst, because OCR reads equations as text.
+
+Old books are harder. On a scanned 1970s letterpress novel (207 pages, black and white, 300 dpi), checked against a page typed by hand, 5.5% of the Bangla letters came out wrong (the earlier engine got 34% wrong). pdfdown also repairs the misreadings typical of these books (া read as ৷, the দাঁড়ি । read as 1, quotes read as *), keeps indented dialogue as paragraphs instead of a list, and reads large chapter numbers that the layout analysis takes for pictures (10 of the 12 found). Bold words in heavy ink are often read as Latin letters, so Latin letters are switched off for Bangla: use `--lang bn+en` if the text has English words.
+
+Many Bangla books and newspapers were typeset in older Bijoy fonts (SutonnyMJ, JugantorMJ and similar). Their PDFs store Bangla as Latin letters, so other converters give text like `gvmy` ivbv` instead of `মাসুদ রানা`. pdfdown recognises these fonts and converts the text to Unicode Bangla, putting vowel signs and the reph (রেফ, the র্ written above a letter) in spoken order (`M‡Z©i` becomes `গর্তের`). It also keeps chapter titles that sit on a decorative picture, and removes running headers that are merged into the text. Tested on a 323-page novel: all 15 chapter titles found, no Latin letters left. The letter table comes from [bijoy2unicode](https://github.com/mad-fox/bijoy2unicode) (MIT).
 
 ### What you get
 
@@ -340,9 +370,9 @@ Several good open-source tools convert PDFs to Markdown. This is how pdfdown com
 
 * **Many equations stay as images.** That is on purpose: LaTeX is used only when it can be verified. In the papers tested, between a fifth and a half of the display equations came out as LaTeX (fewer in notation-heavy physics, more in machine learning papers); you can fix the rest in the app with `e` or `h`.
 * **Inline math** inside sentences is kept as text with superscripts and subscripts, not converted to LaTeX. Simple inline math reads well ("λ<sup>t−1</sup>", "W ∈ R<sup>K×H</sup>"), but fractions, roots and stacked symbols inside a sentence come out flattened or out of order, especially in math-heavy physics papers.
-* **Scanned pages** lose pdfdown's text repairs: superscripts and subscripts are not restored, and equations stay images, because there is no PDF text to check against. OCR has been measured on clean and photocopy-like scans made from real papers (below), not yet on old or damaged originals.
-* **Bangla PDFs in older Bijoy-style fonts** (SutonnyMJ and similar) store their text as Latin letters, so the text comes out garbled. Reading the pages with `--ocr all --lang bn` should get around it, but this has not been tested on such files yet.
-* **Tested on macOS.** Linux should work but has not been tested yet. Windows is not supported yet.
+* **Scanned pages** lose pdfdown's text repairs: superscripts and subscripts are not restored, and equations stay images, because there is no PDF text to check against. OCR has been measured on clean and photocopy-like scans made from real papers and on one old scanned book (below).
+* **Bijoy fonts** have been tested on one book (JugantorMJ). Other Bijoy-family fonts use the same letter table and should work; rare conjuncts may still come out wrong. If a Bangla PDF in another old font comes out garbled, `--ocr all --lang bn` reads the page images instead.
+* **Tested by hand on macOS.** Windows, macOS and Linux are tested automatically on every change (the test suite and the one-line installers), but pdfdown has not yet been used on a real Windows laptop. Conversions run on the processor there unless the laptop has an NVIDIA graphics card, so they are slower than on a Mac with Apple silicon.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

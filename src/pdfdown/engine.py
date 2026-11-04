@@ -12,11 +12,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-ENGINE_VERSION = 2  # bump to invalidate caches when the conversion options change meaning
+ENGINE_VERSION = 4  # bump to invalidate caches when the conversion options change meaning
 
 
 @dataclass(frozen=True)
@@ -24,7 +25,7 @@ class EngineOptions:
     tables: bool = True
     formulas: bool = False  # Docling's formula model: slow, CPU only on macOS; pdfdown runs it per equation later
     ocr: str = "auto"  # auto: OCR pages without a text layer; all: OCR every page (bad text layers); off
-    ocr_engine: str = "auto"  # auto (RapidOCR, or EasyOCR for Bangla), rapidocr, easyocr, mac (Apple Vision, macOS only)
+    ocr_engine: str = "auto"  # auto (RapidOCR), rapidocr, tesseract and easyocr (Bangla), mac (Apple Vision, macOS only)
     ocr_lang: tuple[str, ...] = ()  # OCR languages, e.g. ("bn", "en"); empty: the engine's default
     device: str = "auto"  # auto, cpu, mps, cuda
 
@@ -87,15 +88,28 @@ def convert(pdf: str | Path, options: EngineOptions | None = None, use_cache: bo
             progress("Using cached layout analysis")
         return DoclingDocument.load_from_json(cached)
 
+    device = _device(options.device)
+    if options.formulas and device == "mps":
+        device = "cpu"  # the formula model does not support Apple GPUs
+    do_ocr = options.ocr == "all" or (options.ocr == "auto" and bool(scanned))
+    converter = make_converter(options, do_ocr, device)
+    if progress:
+        reading = (" and reading every page with OCR" if options.ocr == "all"
+                   else f" and reading {len(scanned)} scanned page{'s' * (len(scanned) != 1)} with OCR" if do_ocr else "")
+        progress(f"Analysing layout{reading} on {device} (cached afterwards)")
+    result = converter.convert(pdf)
+    doc = result.document
+    doc.save_as_json(cached)
+    return doc
+
+
+def make_converter(options: EngineOptions, do_ocr: bool, device: str = "cpu"):
+    """Docling's converter for these options (also used by `pdfdown setup` to download the models ahead)."""
     from docling.datamodel.accelerator_options import AcceleratorOptions
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
-    device = _device(options.device)
-    if options.formulas and device == "mps":
-        device = "cpu"  # the formula model does not support Apple GPUs
-    do_ocr = options.ocr == "all" or (options.ocr == "auto" and bool(scanned))
     pipeline = PdfPipelineOptions(
         do_table_structure=options.tables,
         do_formula_enrichment=options.formulas,
@@ -105,15 +119,7 @@ def convert(pdf: str | Path, options: EngineOptions | None = None, use_cache: bo
         generate_picture_images=False,  # pdfdown renders its own crops at high resolution
         accelerator_options=AcceleratorOptions(device=device),
     )
-    if progress:
-        reading = (" and reading every page with OCR" if options.ocr == "all"
-                   else f" and reading {len(scanned)} scanned page{'s' * (len(scanned) != 1)} with OCR" if do_ocr else "")
-        progress(f"Analysing layout{reading} on {device} (cached afterwards)")
-    converter = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline)})
-    result = converter.convert(pdf)
-    doc = result.document
-    doc.save_as_json(cached)
-    return doc
+    return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline)})
 
 
 def _ocr_options(options: EngineOptions):
@@ -133,7 +139,17 @@ def _ocr_options(options: EngineOptions):
         # Docling's default threshold throws away (79.6% of characters wrong, against 16.6% keeping everything).
         threshold = 0.1 if "bn" in lang else 0.5
         return P.EasyOcrOptions(mode=mode, confidence_threshold=threshold, **({"lang": lang} if lang else {}))
-    raise ValueError(f"unknown OCR engine {options.ocr_engine!r}: use rapidocr, easyocr or mac")
+    if options.ocr_engine == "tesseract":
+        from pdfdown.tesseract import CODES, program, tessdata
+
+        languages = options.ocr_lang or ("bn",)
+        folder = tessdata(languages)
+        # The program reads whole pages and does better on old print (5.5% of letters wrong on a scanned book,
+        # against 8.6% for the bundled library, which reads line by line); every install has the library.
+        kind = P.TesseractCliOcrOptions if program() else P.TesseractOcrOptions
+        return kind(mode=mode, lang=[CODES.get(code, code) for code in languages], path=str(folder),
+                    scale=300 / 72)  # old print needs 300 dpi
+    raise ValueError(f"unknown OCR engine {options.ocr_engine!r}: use rapidocr, tesseract, easyocr or mac")
 
 
 def scanned_pages(pdf, min_chars: int = 30, min_image_share: float = 0.3) -> list[int]:
@@ -160,16 +176,49 @@ def scanned_pages(pdf, min_chars: int = 30, min_image_share: float = 0.3) -> lis
     return out
 
 
-# Which OCR engine reads which language (measured in scripts/ocr_bench; see the README). RapidOCR, Docling's
-# default, has no Bengali model and Apple Vision does not support Bangla, so Bangla goes to EasyOCR.
-LANGUAGE_ENGINES = {"bn": ("easyocr", ("bn", "en"))}
+# Which OCR engine reads which language (measured in scripts/ocr_bench and on a scanned book; see the README).
+# RapidOCR, Docling's default, has no Bengali model and Apple Vision does not support Bangla. Tesseract reads Bangla
+# best; EasyOCR is the fallback when the Tesseract program is not installed.
 
 
 def ocr_choice(lang: str) -> tuple[str, tuple[str, ...]]:
-    """(engine, languages) for a --lang value such as "bn" or "en"."""
-    lang = lang.strip().lower()
-    if lang in ("bangla", "bengali", "ben"):
-        lang = "bn"
-    if lang in LANGUAGE_ENGINES:
-        return LANGUAGE_ENGINES[lang]
-    return "auto", ()
+    """(engine, languages) for a --lang value such as "bn", "bn+en" (Bangla with English words) or "en"."""
+    from pdfdown import tesseract
+
+    aliases = {"bangla": "bn", "bengali": "bn", "ben": "bn", "english": "en", "eng": "en"}
+    codes = tuple(dict.fromkeys(aliases.get(c, c) for c in re.split(r"[+,\s]+", lang.strip().lower()) if c))
+    if "bn" not in codes:
+        return "auto", ()
+    if tesseract.available():
+        return "tesseract", codes
+    return "easyocr", ("bn", "en")  # EasyOCR's Bangla model is trained with English
+
+
+def looks_bangla(pdf, sample_pages: int = 12) -> bool:
+    """Is the PDF's text mostly Bangla, in Unicode or in an old Bijoy font? Then its scanned pages need Bangla OCR.
+
+    `pdf` is an open pypdfium2 PdfDocument; call it while holding pdfdown.locks.pdfium_lock.
+    """
+    import ctypes
+
+    import pypdfium2.raw as pdfium_c
+
+    from pdfdown.bijoy import is_bijoy_font
+
+    bangla = letters = 0
+    name = ctypes.create_string_buffer(256)
+    flags = ctypes.c_int()
+    step = max(len(pdf) // sample_pages, 1)
+    for number in range(0, len(pdf), step):
+        textpage = pdf[number].get_textpage()
+        for i in range(0, textpage.count_chars(), 7):  # every 7th character is plenty
+            ch = chr(pdfium_c.FPDFText_GetUnicode(textpage.raw, i) or 32)
+            if not ch.isalpha():
+                continue
+            letters += 1
+            if "\u0980" <= ch <= "\u09ff":
+                bangla += 1
+            else:
+                pdfium_c.FPDFText_GetFontInfo(textpage.raw, i, name, ctypes.sizeof(name), ctypes.byref(flags))
+                bangla += is_bijoy_font(name.value.decode("latin-1", "replace"))
+    return letters > 50 and bangla > 0.5 * letters

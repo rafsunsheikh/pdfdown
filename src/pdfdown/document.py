@@ -120,6 +120,8 @@ def from_docling(doc, source: str | Path) -> Document:
         page, box = parts[0]
         block = Block(kind=kind, text=(getattr(item, "text", "") or "").strip(), page=page, box=box, parts=parts)
         block.extra["ref"] = item.self_ref
+        if getattr(item, "marker", None):
+            block.extra["marker"] = item.marker  # a list item's bullet or number, when Docling saw one
         if getattr(item, "captions", None):
             block.extra["caption_refs"] = [c.cref for c in item.captions]
         if kind == "heading":

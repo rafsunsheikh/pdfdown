@@ -35,6 +35,7 @@ def run(doc: Document, pdf=None) -> None:
             changed += 1
     _join_split_title(doc)
     _authors_are_not_headings(doc)
+    _bangla_sentences_are_not_headings(doc)
     if changed:
         doc.notes.append(f"Put {changed} two-column page{'s' * (changed != 1)} into reading order (left column, then right).")
 
@@ -116,4 +117,14 @@ def _authors_are_not_headings(doc: Document) -> None:
         if b.kind == "heading" and re.match(r"^\s*(abstract|\d|[IVX]+\.|introduction)", b.text, re.I):
             break
         if b.kind == "heading" and len(_NAME_LIST.findall(b.text)) >= 2:
+            b.kind = "paragraph"
+
+
+def _bangla_sentences_are_not_headings(doc: Document) -> None:
+    """The last line of a Bangla paragraph at the foot of a page ("ঘোরাচ্ছেন।") can be taken for a heading.
+    A heading does not end with । ? or !; such a block is a paragraph, and stitching joins it to its sentence."""
+    from pdfdown.pdftext import bengali_share
+
+    for b in doc.blocks:
+        if b.kind == "heading" and bengali_share(b.text) > 0.3 and re.search(r"[।?!]['’”\"*]*\s*$", b.text):
             b.kind = "paragraph"

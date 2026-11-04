@@ -107,7 +107,8 @@ async def convert_pdf(path: str, output_dir: str | None = None, read_equations: 
             as an image and is faster.
         ocr: "auto" (default) reads pages without a text layer (scans) with OCR; "all" reads every page with OCR,
             for scans whose text layer is wrong or garbled; "off" never uses OCR.
-        language: the document's language for OCR, for example "bn" for Bangla; default English.
+        language: the language for OCR: "bn" for Bangla, "bn+en" for Bangla with English words; default: found
+            from the text or the page images.
 
     Returns where the Markdown is, counts of figures, tables and equations, which equations stayed images and
     why, what the cleanup did, and possible problems left. Read the Markdown with read_markdown.

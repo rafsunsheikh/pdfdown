@@ -23,7 +23,8 @@ def drop_inner_text(doc: Document, pdf=None) -> None:
     kept, dropped = [], 0
     for b in doc.blocks:
         if b.kind in ("paragraph", "list_item", "heading") and b.box and len(b.text) < 200:
-            if any(f.page == b.page and _inside_share(b.box, f.box) > 0.6 for f in figures):
+            holders = [f for f in figures if f.page == b.page and _inside_share(b.box, f.box) > 0.6]
+            if holders and not (b.kind == "heading" and all(_ornament(f, b, doc) for f in holders)):
                 dropped += 1
                 continue
             if _label_beside_figure(b, figures):
@@ -33,6 +34,14 @@ def drop_inner_text(doc: Document, pdf=None) -> None:
     doc.blocks = kept
     if dropped:
         doc.notes.append(f"Dropped {dropped} text fragments drawn inside figures (axis labels and legends).")
+
+
+def _ornament(figure, heading, doc: Document) -> bool:
+    """A decoration behind a chapter title: no caption, and the title is the only text drawn on it."""
+    if figure.extra.get("caption_refs"):
+        return False
+    return not any(o is not heading and o.page == figure.page and o.box and o.kind not in ("figure", "furniture")
+                   and _inside_share(o.box, figure.box) > 0.6 for o in doc.blocks)
 
 
 def _label_beside_figure(b, figures) -> bool:

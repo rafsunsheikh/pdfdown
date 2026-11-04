@@ -8,11 +8,14 @@ after floats and furniture have been sorted out.
 
 from __future__ import annotations
 
-from pdfdown.cleanup import captions, figures, furniture, notes, order, retext, stitch
+from pdfdown.cleanup import bangla_ocr, bijoy, captions, figures, furniture, notes, order, retext, stitch
 from pdfdown.document import Document
 from pdfdown.pdftext import PdfText
 
 STEPS = [
+    ("chapter titles", furniture.rescue_headings),
+    ("bijoy", bijoy.run),
+    ("bangla ocr", bangla_ocr.run),
     ("furniture", furniture.run),
     ("order", order.run),
     ("figure text", figures.drop_inner_text),

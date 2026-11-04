@@ -36,13 +36,32 @@ def run(pdf: str | Path, out_dir: str | Path = "pdfdown-output", latex: bool = T
     with pdfium_lock:
         import pypdfium2 as pdfium
 
-        from pdfdown.engine import scanned_pages
+        from pdfdown.engine import looks_bangla, scanned_pages
 
         options = options or EngineOptions()
         document = pdfium.PdfDocument(str(pdf))
         pages = len(document)
         ocr_pages = (list(range(1, pages + 1)) if options.ocr == "all"
                      else scanned_pages(document) if options.ocr == "auto" else [])
+        if ocr_pages and options.ocr_engine == "auto" and not options.ocr_lang:
+            from dataclasses import replace
+
+            from pdfdown.engine import ocr_choice
+            from pdfdown.tesseract import page_script
+
+            # Bangla text in the PDF, or (a scan with no text at all) Bangla script on the page images
+            if looks_bangla(document) or page_script(document, ocr_pages, say) == "Bengali":
+                engine, languages = ocr_choice("bn")
+                options = replace(options, ocr_engine=engine, ocr_lang=languages)
+                say("This document is in Bangla: scanned pages will be read with Bangla OCR")
+        if ocr_pages and options.ocr_engine == "tesseract":
+            from dataclasses import replace
+
+            from pdfdown.tesseract import speckled
+
+            if speckled(document, ocr_pages):
+                options = replace(options, ocr_engine="easyocr", ocr_lang=("bn", "en"))
+                say("The scan is speckled: using the OCR engine that copes better with specks")
         document.close()
     cached = cache_path(pdf, options).is_file()
     mark("layout-cached" if cached else "layout", len(ocr_pages), pages)

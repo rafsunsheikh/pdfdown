@@ -1,6 +1,7 @@
 """Small, fast checks of the rules, without models."""
 
 from collections import Counter
+from pathlib import Path
 
 from pdfdown.cleanup.captions import number_of
 from pdfdown.cleanup.stitch import ends_sentence
@@ -140,3 +141,117 @@ def test_bangla_sentence_ends_and_continues():
     assert ends_sentence("পদ্মা নদী বাংলাদেশের প্রধান নদী।")
     assert not ends_sentence("পদ্মা নদী বাংলাদেশের প্রধান")
     assert _continues("নদী। এটি হিমালয়ে উৎপন্ন")
+
+
+def test_bijoy_to_unicode():
+    import unicodedata
+
+    from pdfdown.bijoy import is_bijoy_font, to_unicode
+
+    cases = {
+        "gvmy` ivbv": "মাসুদ রানা",
+        "cvU©‡mi": "পার্টসের",       # reph before its consonant, ে after the next one
+        "M‡Z©i": "গর্তের",
+        "Awbw`©óKvj": "অনির্দিষ্টকাল",
+        "Wvwj©s": "ডার্লিং",
+        "†PvL": "চোখ",               # ে ... া is ো
+        "†VuvU": "ঠোঁট",              # ঁ typed before the vowel sign
+        "euvav": "বাঁধা",
+        "wKš‘": "কিন্তু",             # no doubled ্
+        "GwÄ‡b": "এঞ্জিনে",          # words that crashed the bijoy2unicode library
+        "†b‡P": "নেচে",
+        "h‡š¿i": "যন্ত্রের",          # the vowel sign typed inside a conjunct
+        "BZ¯ÍZ": "ইতস্তত",           # ¯Í is স্ত
+        "Aw¯’i": "অস্থির",
+        "wew¯§Z": "বিস্মিত",
+        "AšÍZ": "অন্তত",              # šÍ is ন্ত, not ন্ত্ম
+        "wPšÍvq": "চিন্তায়",
+        "AvZ¥v": "আত্মা",             # a real ত্ম
+    }
+    for bijoy, want in cases.items():
+        assert unicodedata.normalize("NFC", to_unicode(bijoy)) == unicodedata.normalize("NFC", want), bijoy
+    assert to_unicode("mgq").endswith("য়")  # য় stays one code point, so search finds it
+    assert is_bijoy_font("LAMOAH+JugantorMJ") and is_bijoy_font("SutonnyMJ") and not is_bijoy_font("Times-Roman")
+    assert is_bijoy_font("JugantorMJBold") and is_bijoy_font("SutonnyMJ-Italic")  # headings use the bold and italic cuts
+
+
+def _book(blocks, pages=6):
+    from pdfdown.document import Document
+
+    return Document(source=Path("book.pdf"), blocks=blocks, page_sizes={p: (342.0, 504.0) for p in range(1, pages + 1)})
+
+
+def test_running_header_merged_into_a_paragraph():
+    from pdfdown.cleanup import furniture
+    from pdfdown.document import Block, Box
+
+    blocks = [Block("furniture", f"মুক্ত বিহঙ্গ-১ {p}", p, Box(36, 440, 300, 452)) for p in range(1, 7)]
+    blocks.append(Block("paragraph", "৩৮ মুক্ত বিহঙ্গ-১ ১০৩ প্রথম বাঁকেই খুদে একটা রেস্তোরাঁ", 3, Box(36, 300, 300, 452)))
+    blocks.append(Block("paragraph", "মুক্ত বিহঙ্গের মত উড়ে গেল", 4, Box(36, 300, 300, 452)))  # a word, not the header
+    doc = _book(blocks)
+    furniture.run(doc)
+    assert [b.text for b in doc.blocks] == ["প্রথম বাঁকেই খুদে একটা রেস্তোরাঁ", "মুক্ত বিহঙ্গের মত উড়ে গেল"]
+
+
+class _Sizes:
+    """Stands in for PdfText: every block's letters have the size given by its text."""
+
+    def __init__(self, sizes):
+        self.sizes = sizes
+
+    def page(self, number):
+        return self
+
+    def inside(self, box):
+        return [Char("x", 0, 0, 1, 1, self.sizes[box.t], False)]
+
+
+def test_chapter_title_taken_for_a_page_header():
+    from pdfdown.cleanup import figures, furniture
+    from pdfdown.document import Block, Box
+
+    title = Block("furniture", "wZb", 3, Box(150, 67, 190, 90))          # তিন, once, large
+    header = [Block("furniture", "gvmy` ivbv", p, Box(36, 20, 120, 31)) for p in range(1, 7)]
+    text = [Block("paragraph", "...", p, Box(36, 100 + p, 300, 400)) for p in range(1, 7)]
+    ornament = Block("figure", "", 3, Box(100, 50, 240, 95))
+    doc = _book([ornament, title, *header, *text])
+    sizes = {67: 20.7, 20: 15.7, 50: 0.0, **{100 + p: 15.7 for p in range(1, 7)}}
+    furniture.rescue_headings(doc, _Sizes(sizes))
+    assert title.kind == "heading" and all(h.kind == "furniture" for h in header)
+    figures.drop_inner_text(doc)
+    assert title in doc.blocks  # the only text on an uncaptioned picture: a chapter ornament, not a chart label
+
+
+def test_bangla_ocr_repairs():
+    from pdfdown.cleanup.bangla_ocr import fix_text
+
+    assert fix_text("রান৷ হেসে") == "রানা হেসে"           # ৷ (a currency sign) after a letter is া
+    assert fix_text("দরজা বন্ধ হল 1") == "দরজা বন্ধ হল ।"   # a lone 1 after a word is a দাঁড়ি
+    assert fix_text("পরবে ৷") == "পরবে ।"
+    assert fix_text("'তোমার স্যুটকেস ।*") == "'তোমার স্যুটকেস ।'"
+    assert fix_text("১৯৭১ সালে 1971") == "১৯৭১ সালে 1971"   # real numbers stay
+
+
+def test_chapter_numbers_count_up():
+    from pdfdown.cleanup.bangla_ocr import _fill_sequence
+    from pdfdown.document import Block
+
+    chapters = [Block("heading", t) for t in ("৯", "৬০", "১১", "১২")]
+    _fill_sequence(chapters)
+    assert [b.text for b in chapters] == ["৯", "১০", "১১", "১২"]
+    gap = [Block("heading", t) for t in ("৩", "৫", "৬")]  # ৪ is missing, not misread: nothing to fix
+    _fill_sequence(gap)
+    assert [b.text for b in gap] == ["৩", "৫", "৬"]
+
+
+def test_language_choice(monkeypatch):
+    from pdfdown import tesseract
+    from pdfdown.engine import ocr_choice
+
+    monkeypatch.setattr(tesseract, "available", lambda: True)
+    assert ocr_choice("bn") == ("tesseract", ("bn",))
+    assert ocr_choice("bn+en") == ("tesseract", ("bn", "en"))
+    assert ocr_choice("Bangla") == ("tesseract", ("bn",))
+    assert ocr_choice("en") == ("auto", ())
+    monkeypatch.setattr(tesseract, "available", lambda: False)
+    assert ocr_choice("bn") == ("easyocr", ("bn", "en"))

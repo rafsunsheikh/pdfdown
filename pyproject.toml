@@ -21,6 +21,10 @@ dependencies = [
   "textual-image>=0.8",
   "mcp>=2.3,<3",
   "easyocr>=1.7",  # Bangla OCR: RapidOCR and Apple Vision have no Bangla model
+  "bijoy2unicode>=0.1.1",  # letter table for Bangla in old Bijoy fonts (SutonnyMJ ...)
+  # Tesseract for Bangla scans, built in. Only where tesserocr has prebuilt files: elsewhere pip would try to compile
+  # it and fail the whole install (macOS 15 is Darwin 24). Without it, Bangla scans use EasyOCR.
+  "tesserocr>=2.12.0; (sys_platform == 'darwin' and platform_release >= '24') or (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'win32' and platform_machine == 'AMD64')",
 ]
 classifiers = [
   "Development Status :: 4 - Beta",

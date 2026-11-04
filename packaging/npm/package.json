@@ -7,12 +7,21 @@
   },
   "files": [
     "bin/pdfdown.js",
+    "install.ps1",
+    "install.sh",
     "README.md"
   ],
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["pdf", "markdown", "tui", "research", "latex", "converter"],
+  "keywords": [
+    "pdf",
+    "markdown",
+    "tui",
+    "research",
+    "latex",
+    "converter"
+  ],
   "license": "MIT",
   "author": "Md Rafsun Sheikh",
   "repository": {
@@ -23,5 +32,8 @@
   "homepage": "https://github.com/rafsunsheikh/pdfdown",
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "prepack": "cp ../../install.ps1 ../../install.sh ."
   }
 }
