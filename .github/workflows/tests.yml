@@ -42,7 +42,7 @@ jobs:
         run: |
           uv build --wheel -o dist-ci
           uv venv .venv
-          uv pip install --python .venv dist-ci/*.whl pytest
+          uv pip install --python .venv "$(ls dist-ci/*.whl)[dev]"
       - name: Check the command works
         shell: bash
         run: .venv/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/pdfdown --version
