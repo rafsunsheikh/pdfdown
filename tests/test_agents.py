@@ -16,7 +16,7 @@ REPORT = Path(__file__).resolve().parents[1] / "corpus" / "office-report.pdf"
 
 def test_batch_json(tmp_path):
     run = subprocess.run([sys.executable, "-m", "pdfdown.cli", "--batch", "--json", "--no-latex", str(REPORT), "-o", str(tmp_path)],
-                         capture_output=True, text=True, check=True)
+                         capture_output=True, text=True, encoding="utf-8", check=True)
     data = json.loads(run.stdout)  # stdout is only the JSON; progress went to stderr
     (result,) = data["results"]
     assert Path(result["markdown"]).is_absolute() and Path(result["markdown"]).is_file()
@@ -57,7 +57,7 @@ async def test_agent_converts_reads_and_fixes_an_equation(tmp_path):
         right = (await call(client, "set_equation_latex", markdown_path=md, element_id="eq-1",
                             latex=r"s_{t}=\alpha x_{t}+(1-\alpha)s_{t-1}")).structured_content
         assert right["accepted"]
-        assert "$$\ns_{t}=\\alpha x_{t}+(1-\\alpha)s_{t-1}\n$$" in Path(md).read_text()
+        assert "$$\ns_{t}=\\alpha x_{t}+(1-\\alpha)s_{t-1}\n$$" in Path(md).read_text(encoding="utf-8")
         equations = (await call(client, "list_elements", markdown_path=md, kind="equation")).structured_content
         assert equations["elements"][0]["written_as"] == "latex" and equations["elements"][0]["latex_by"] == "agent"
 

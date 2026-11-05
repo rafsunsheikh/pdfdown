@@ -85,7 +85,7 @@ def tessdata(languages: tuple[str, ...], say=None) -> Path:
     settings = "tessedit_create_tsv 1\n"  # tsv: Docling reads word boxes from it
     if "eng" not in codes:
         settings += f"tessedit_char_blacklist {LATIN}\n"
-    (folder / "configs" / "tsv").write_text(settings)
+    (folder / "configs" / "tsv").write_text(settings, encoding="utf-8")
     os.environ["TESSDATA_PREFIX"] = str(folder)  # Docling lists the installed languages without passing the folder
     _blacklist["latin"] = "eng" not in codes
     _hook_docling()

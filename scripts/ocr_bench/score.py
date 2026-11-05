@@ -59,7 +59,7 @@ def main() -> None:
     os.environ.setdefault("PDFDOWN_CACHE", str(BENCH / "cache"))
     only_lang = sys.argv[1] if len(sys.argv) > 1 else None
     only_engine = sys.argv[2] if len(sys.argv) > 2 else None
-    manifest = json.loads((BENCH / "manifest.json").read_text())
+    manifest = json.loads((BENCH / "manifest.json").read_text(encoding="utf-8"))
     results = []
     for item in manifest:
         if only_lang and item["lang"] != only_lang:
@@ -87,7 +87,7 @@ def main() -> None:
                                 "wer": wer, "cer": cer})
                 print(f"{item['id']:12} {variant:10} {engine:9} WER {wer:6.1%}  CER {cer:6.1%}  {seconds:5.0f} s", flush=True)
     out = BENCH / f"results-{only_lang or 'all'}-{only_engine or 'all'}.json"
-    out.write_text(json.dumps(results, indent=1))
+    out.write_text(json.dumps(results, indent=1), encoding="utf-8")
     print(f"saved {out}")
 
 

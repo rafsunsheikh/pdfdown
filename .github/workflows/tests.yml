@@ -48,7 +48,7 @@ jobs:
         run: .venv/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/pdfdown --version
       - name: Run the tests
         shell: bash
-        run: .venv/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/python -m pytest -q -x --durations=10
+        run: .venv/${{ runner.os == 'Windows' && 'Scripts' || 'bin' }}/python -m pytest -q --durations=10
 
   # The one-line installers, as a new user runs them, on the package built from this commit.
   installer-windows:

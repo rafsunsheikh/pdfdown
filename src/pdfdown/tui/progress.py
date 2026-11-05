@@ -27,7 +27,7 @@ SPEED_FILE = "speed.json"
 
 def _speeds() -> dict:
     try:
-        return {**DEFAULTS, **json.loads((cache_dir() / SPEED_FILE).read_text())}
+        return {**DEFAULTS, **json.loads((cache_dir() / SPEED_FILE).read_text(encoding="utf-8"))}
     except (OSError, ValueError, TypeError):
         return dict(DEFAULTS)
 
@@ -47,7 +47,7 @@ def remember_speed(key: str, measured: float) -> None:
     speeds = _speeds()
     speeds[key] = round(0.5 * float(speeds[key]) + 0.5 * measured, 2)
     try:
-        (cache_dir() / SPEED_FILE).write_text(json.dumps(speeds))
+        (cache_dir() / SPEED_FILE).write_text(json.dumps(speeds), encoding="utf-8")
     except OSError:
         pass
 
